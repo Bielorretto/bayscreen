@@ -1,0 +1,30 @@
+[
+  {
+    "id": "exemple-seuil",
+    "nom": "Valeur au-dessus de 100 → notification",
+    "active": true,
+    "desQue": { "source": "web", "type": "valeur_changee", "si": [{ "champ": "valeur", "op": "superieur", "valeur": 100 }] },
+    "alors": { "mode": "fixe", "action": "notifier", "params": { "text": "{{nom}} : {{valeurTexte}} (avant : {{ancienne}})" } },
+    "validation": "auto"
+  },
+  {
+    "id": "exemple-mail",
+    "nom": "Mail reçu → Claude propose un message Slack",
+    "active": true,
+    "desQue": { "source": "mail", "type": "mail_recu" },
+    "alors": {
+      "mode": "ia",
+      "consigne": "Si le mail demande une réponse ou une action rapide, propose un message Slack court qui résume la demande et qui l'a faite. Sinon, ne propose rien.",
+      "actionsPermises": ["slack.envoyer", "notifier"]
+    },
+    "validation": "demander"
+  },
+  {
+    "id": "exemple-fin-visio",
+    "nom": "Fin de visio → notification",
+    "active": true,
+    "desQue": { "source": "appel", "type": "visio_terminee" },
+    "alors": { "mode": "fixe", "action": "notifier", "params": { "text": "Visio terminée ({{app}}) : {{nbLignes}} lignes transcrites" } },
+    "validation": "auto"
+  }
+]

@@ -1,0 +1,159 @@
+<!doctype html>
+<!-- Propriétaire : Dev 2. Page unique, sans dépendance : état en direct via le WebSocket /ws. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dès que</title>
+<style>
+  :root { --fond:#f7f7f5; --carte:#fff; --texte:#1c1c1a; --doux:#6b6b66; --bord:#e2e2dc; --accent:#2f6fde; --ok:#2e8b57; --ko:#c0392b; --alerte:#b7791f; }
+  @media (prefers-color-scheme: dark) { :root { --fond:#151513; --carte:#1f1f1c; --texte:#ececE6; --doux:#9a9a93; --bord:#33332f; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--fond); color:var(--texte); }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px; border-bottom:1px solid var(--bord); }
+  h1 { font-size:18px; margin:0; }
+  .pastille { padding:2px 10px; border-radius:99px; border:1px solid var(--bord); color:var(--doux); }
+  .pastille.on { color:var(--ok); border-color:var(--ok); }
+  main { display:grid; grid-template-columns: 1.1fr 1.2fr 1fr; gap:16px; padding:16px 20px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--carte); border:1px solid var(--bord); border-radius:10px; padding:14px; min-height:120px; }
+  h2 { font-size:14px; margin:0 0 10px; }
+  .item { border-top:1px solid var(--bord); padding:8px 0; }
+  .item:first-of-type { border-top:0; }
+  .doux { color:var(--doux); font-size:12px; }
+  code, pre { font:12px ui-monospace, monospace; white-space:pre-wrap; word-break:break-word; }
+  button { font:inherit; padding:4px 10px; border-radius:6px; border:1px solid var(--bord); background:transparent; color:var(--texte); cursor:pointer; }
+  button.ok { border-color:var(--ok); color:var(--ok); } button.ko { border-color:var(--ko); color:var(--ko); }
+  .executee { color:var(--ok); } .echec, .erreur { color:var(--ko); } .refusee { color:var(--doux); } .alerte { color:var(--alerte); }
+  #visio.reveil { outline:3px solid var(--accent); }
+  #ecoute { display:none; color:var(--accent); font-weight:600; margin:6px 0; }
+  #visio.reveil #ecoute { display:block; }
+  #transcription { max-height:180px; overflow:auto; }
+  .micro { font-weight:600; }
+  input, textarea, select { font:inherit; width:100%; padding:6px; border:1px solid var(--bord); border-radius:6px; background:transparent; color:var(--texte); }
+  form { display:grid; gap:6px; margin-top:8px; }
+  .reponse { background:color-mix(in srgb, var(--accent) 8%, transparent); border-radius:8px; padding:8px; margin-top:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Dès que</h1>
+  <span id="etat-ws" class="pastille">déconnecté</span>
+  <span id="etat-visio" class="pastille">pas de visio</span>
+</header>
+<main>
+  <div>
+    <section><h2>Actions à valider</h2><div id="attente"><p class="doux">Rien en attente.</p></div></section>
+    <section style="margin-top:16px"><h2>Historique des actions</h2><div id="historique"></div></section>
+  </div>
+  <div>
+    <section id="visio">
+      <h2>Assistant de visio</h2>
+      <div id="ecoute">Je vous écoute…</div>
+      <div id="transcription" class="doux">L'assistant dort hors visio.</div>
+      <form id="form-question"><input id="question" placeholder="Question tapée (pendant une visio)" autocomplete="off" /></form>
+      <div id="reponses"></div>
+    </section>
+    <section style="margin-top:16px">
+      <h2>Simuler un événement</h2>
+      <form id="form-evt">
+        <select id="evt-source"><option>web</option><option>mail</option><option>webhook</option><option>screenpipe</option><option>appel</option></select>
+        <input id="evt-type" value="valeur_changee" />
+        <textarea id="evt-donnees" rows="3">{"nom":"test","valeur":120,"valeurTexte":"120","ancienne":"90"}</textarea>
+        <button type="submit">Envoyer</button>
+      </form>
+    </section>
+  </div>
+  <div>
+    <section><h2>Règles</h2><div id="regles"></div></section>
+    <section style="margin-top:16px"><h2>Journal</h2><div id="journal"></div></section>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+const actions = new Map();
+let journal = [];
+let lignes = [];
+
+function bip() {
+  try { const ctx = new AudioContext(); const o = ctx.createOscillator(); o.frequency.value = 880; o.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.15); } catch {}
+}
+
+function rendreActions() {
+  const toutes = [...actions.values()].sort((a, b) => b.creeeLe.localeCompare(a.creeeLe));
+  const attente = toutes.filter((a) => a.statut === "proposee");
+  $("attente").innerHTML = attente.length ? attente.map((a) => `
+    <div class="item"><b>${esc(a.nom)}</b> <code>${esc(JSON.stringify(a.params))}</code>
+      ${a.preuve ? `<div class="doux">Preuve : ${esc(a.preuve)}</div>` : ""}
+      <div style="margin-top:6px"><button class="ok" onclick="agir('${a.id}','valider')">Valider</button>
+      <button class="ko" onclick="agir('${a.id}','refuser')">Refuser</button></div></div>`).join("") : '<p class="doux">Rien en attente.</p>';
+  $("historique").innerHTML = toutes.filter((a) => a.statut !== "proposee").slice(0, 30).map((a) =>
+    `<div class="item"><span class="${a.statut}">${esc(a.statut)}</span> · <b>${esc(a.nom)}</b> <span class="doux">${esc(a.erreur ?? "")}</span></div>`).join("");
+}
+
+function rendreJournal() {
+  $("journal").innerHTML = journal.slice(-60).reverse().map((l) =>
+    `<div class="item ${l.niveau}"><span class="doux">${l.date.slice(11, 19)}</span> ${esc(l.message)}</div>`).join("");
+}
+
+function rendreRegles(regles) {
+  $("regles").innerHTML = regles.map((r) => `<div class="item"><b>${esc(r.nom)}</b> ${r.active ? "" : '<span class="doux">(inactive)</span>'}
+    <div class="doux">dès que ${esc(r.desQue.source)}/${esc(r.desQue.type)} → ${r.alors.mode === "fixe" ? esc(r.alors.action) : "Claude choisit parmi " + esc(r.alors.actionsPermises.join(", "))} · ${esc(r.validation)}</div></div>`).join("") || '<p class="doux">Aucune règle.</p>';
+}
+
+async function agir(id, verbe) {
+  const r = await fetch(`/api/actions/${id}/${verbe}`, { method: "POST" });
+  if (!r.ok) alert((await r.json()).erreur);
+}
+
+function recevoir(m) {
+  switch (m.type) {
+    case "etat": m.actions.forEach((a) => actions.set(a.id, a)); journal = m.journal; rendreRegles(m.regles); rendreActions(); rendreJournal(); break;
+    case "action": actions.set(m.action.id, m.action); rendreActions(); break;
+    case "journal": journal.push(m.ligne); rendreJournal(); break;
+    case "visio":
+      $("etat-visio").textContent = m.active ? `visio en cours${m.app ? " · " + m.app : ""}` : "pas de visio";
+      $("etat-visio").classList.toggle("on", m.active);
+      if (!m.active) { $("visio").classList.remove("reveil"); lignes = []; $("transcription").textContent = "L'assistant dort hors visio."; }
+      break;
+    case "transcription":
+      lignes.push(m); lignes = lignes.slice(-12);
+      $("transcription").innerHTML = lignes.map((l) => `<div class="${l.micro ? "micro" : ""}">${esc(l.texte)}</div>`).join("");
+      $("transcription").scrollTop = 1e9; break;
+    case "reveil": $("visio").classList.add("reveil"); bip(); break;
+    case "question": $("reponses").insertAdjacentHTML("afterbegin", `<div class="reponse" data-q="${esc(m.question)}"><b>${esc(m.question)}</b><div class="doux">Claude réfléchit…</div></div>`); break;
+    case "reponse": {
+      $("visio").classList.remove("reveil");
+      const bloc = [...document.querySelectorAll(".reponse")].find((b) => b.dataset.q === m.question);
+      const html = `<b>${esc(m.question)}</b><div>${esc(m.reponse)}</div>${m.citations.map((c) => `<div class="doux">« ${esc(c)} »</div>`).join("")}`;
+      if (bloc) bloc.innerHTML = html; else $("reponses").insertAdjacentHTML("afterbegin", `<div class="reponse">${html}</div>`);
+      break;
+    }
+  }
+}
+
+function connecter() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { $("etat-ws").textContent = "connecté"; $("etat-ws").classList.add("on"); };
+  ws.onclose = () => { $("etat-ws").textContent = "déconnecté"; $("etat-ws").classList.remove("on"); setTimeout(connecter, 1500); };
+  ws.onmessage = (e) => recevoir(JSON.parse(e.data));
+}
+connecter();
+
+$("form-question").onsubmit = async (e) => {
+  e.preventDefault();
+  const question = $("question").value.trim(); if (!question) return;
+  const r = await fetch("/api/copilote/question", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+  if (!r.ok) alert((await r.json()).erreur); else $("question").value = "";
+};
+
+$("form-evt").onsubmit = async (e) => {
+  e.preventDefault();
+  let donnees; try { donnees = JSON.parse($("evt-donnees").value || "{}"); } catch { return alert("JSON invalide"); }
+  const r = await fetch("/api/evenements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: $("evt-source").value, type: $("evt-type").value, donnees }) });
+  if (!r.ok) alert((await r.json()).erreur);
+};
+</script>
+</body>
+</html>
