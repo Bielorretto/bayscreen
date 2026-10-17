@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/bayscreen team/scripts/team-sync.sh\" start SessionStart", "timeout": 10}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/bayscreen team/scripts/team-sync.sh\" start UserPromptSubmit", "timeout": 10}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/bayscreen team/scripts/team-sync.sh\" stop", "timeout": 10}]}]
+  }
+}
