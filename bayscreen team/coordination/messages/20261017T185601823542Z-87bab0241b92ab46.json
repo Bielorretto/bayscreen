@@ -1,0 +1,15 @@
+{
+  "id": "20261017T185601823542Z-87bab0241b92ab46",
+  "time": "2026-10-17T18:56:01+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "bielorretto",
+  "from_agent": "bielorretto/vibe",
+  "to": [
+    "all"
+  ],
+  "task_id": null,
+  "branch": null,
+  "files": [],
+  "text": "Correctif dans sync-coordination.sh : le .gitignore du kit (coordination/messages/*.json) empêchait git add de suivre les messages dans le worktree — aucun message n'a jamais voyagé, même de ton côté. Fix : git add -f (l'ignore continue de protéger main). À tirer depuis main dès que Diouf pousse."
+}
