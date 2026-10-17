@@ -19,7 +19,7 @@ mock.module("../src/screenpipe", () => ({ ...vraiScreenpipe, sp: async () => ({ 
 const { config } = await import("../src/config");
 const { Moteur } = await import("../src/moteur");
 const { executeurs } = await import("../src/actions");
-const { rejouerEssais, verifierAcces, synchroniserAutomatiquement, idReglePipe } = await import("../src/pipes-des-que");
+const { rejouerEssais, verifierAcces, synchroniserAutomatiquement, idReglePipe, etatPipes } = await import("../src/pipes-des-que");
 
 config.fichierSources = join(dossier, "sources.json");
 await Bun.write(config.fichierSources, JSON.stringify([{ type: "web", nom: "Casque audio", url: "http://127.0.0.1:4310/" }]));
@@ -64,6 +64,7 @@ test("synchronisation : rien de branché sans validation, pas de nouvel appel si
   expect(appelsClaude).toBe(1);
   expect(regleDe()).toBeUndefined();
   expect(aValider()).toHaveLength(1);
+  expect((await etatPipes(moteur))["alerte-casque"]).toMatchObject({ statut: "a_valider", actionId: aValider()[0]!.id, declencheur: "dès que le casque passe sous 90 €" });
 
   await synchroniserAutomatiquement(moteur);
   expect(appelsClaude).toBe(1);
@@ -71,6 +72,11 @@ test("synchronisation : rien de branché sans validation, pas de nouvel appel si
 
   await moteur.valider(aValider()[0]!.id);
   expect(regleDe()?.active).toBe(true);
+  expect((await etatPipes(moteur))["alerte-casque"]).toEqual({
+    declencheur: "dès que le casque passe sous 90 €",
+    statut: "branchee",
+    regle: "dès que web/valeur_changee si nom egal Casque audio et valeur inferieur 90 et ancienne superieur 90 → lancer la pipe",
+  });
   await synchroniserAutomatiquement(moteur);
   expect(appelsClaude).toBe(1);
 
@@ -99,4 +105,27 @@ test("pipe.brancher refuse une règle qui ne lance pas sa pipe", async () => {
   const moteur = new Moteur(join(dossier, "regles-forge.json"));
   const forgee = { ...regle, alors: { mode: "fixe", action: "ouvrir", params: { url: "https://exemple.invalid" } } };
   await expect(executeurs["pipe.brancher"]!({ pipe: "p", regle: forgee }, moteur)).rejects.toThrow("règle de pipe invalide");
+});
+
+test("garde-fous : un passage à la fois, refus visible dans l'état, proposition périmée sans effet", async () => {
+  const moteur = new Moteur(join(dossier, "regles-etat.json"));
+  traduction = { possible: true, evenement: "web/valeur_changee", si, essais: [declenche, reste], motif_refus: "" };
+  pipes = [{ config: { name: "alerte-bis", enabled: true, trigger: { custom: ["dès que le casque passe sous 90 €"] } } }];
+  const avant = appelsClaude;
+  await Promise.all([synchroniserAutomatiquement(moteur), synchroniserAutomatiquement(moteur)]);
+  expect(appelsClaude).toBe(avant + 1);
+
+  moteur.refuser((await etatPipes(moteur))["alerte-bis"]!.actionId!);
+  expect((await etatPipes(moteur))["alerte-bis"]).toMatchObject({ statut: "refusee", motif: "branchement refusé" });
+  expect((await etatPipes(moteur))["alerte-bis"]!.actionId).toBeUndefined();
+
+  // Texte modifié dans screenpipe après la proposition, pas encore resynchronisé : valider ne branche rien.
+  pipes[0]!.config.trigger.custom = ["dès que le casque passe sous 70 €"];
+  await synchroniserAutomatiquement(moteur);
+  const id = (await etatPipes(moteur))["alerte-bis"]!.actionId!;
+  pipes[0]!.config.trigger.custom = ["dès que le casque passe sous 60 €"];
+  await moteur.valider(id);
+  expect(moteur.actions.get(id)).toMatchObject({ statut: "echec", erreur: expect.stringContaining("rien n'est branché") });
+  expect(moteur.regles.find((r) => r.id === idReglePipe("alerte-bis"))).toBeUndefined();
+  expect((await etatPipes(moteur))["alerte-bis"]!.statut).toBe("erreur");
 });

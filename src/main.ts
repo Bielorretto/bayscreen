@@ -37,7 +37,7 @@ if (await fichierSources.exists()) {
 
 // Pont « dès que » : surveillance automatique des pipes screenpipe. L'utilisateur
 // crée sa pipe dans l'app avec un déclencheur « dès que » (trigger.custom) : elle est
-// traduite et branchée toute seule, sans action de personne côté moteur.
+// traduite et vérifiée toute seule, puis branchée seulement quand il clique « Valider ».
 if (config.screenpipeCle) {
   const sonderPipes = () =>
     synchroniserAutomatiquement(moteur).catch((e) =>

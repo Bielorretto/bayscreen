@@ -189,6 +189,12 @@ export async function traduireDeclencheur(pipe: string, titre: string, declenche
 }
 
 const conditionsTexte = (si: Condition[] = []) => si.map((c) => `${c.champ} ${c.op} ${c.valeur}`).join(" et ");
+/** La règle en une ligne : « dès que web/valeur_changee si nom egal Casque audio → lancer la pipe ». */
+const resumeRegle = (r: Regle) => {
+  const si = conditionsTexte(r.desQue.si);
+  return `dès que ${r.desQue.source}/${r.desQue.type}${si ? ` si ${si}` : ""} → lancer la pipe`;
+};
+const lirePipes = async () => (await sp<{ data?: { config?: ConfigPipe }[] }>("/pipes")).data ?? [];
 
 // Déclencheurs validés par un humain (pipe → texte), gardés sur disque pour survivre aux redémarrages.
 const fichierValides = () => process.env.FICHIER_PIPES_DES_QUE ?? "data/pipes-des-que.json";
@@ -199,6 +205,32 @@ async function lireValides(): Promise<Record<string, string>> {
 // Déclencheurs déjà traités pendant cette session (proposés ou refusés) : pas de nouvel appel à Claude tant qu'ils ne changent pas.
 const traites = new Map<string, string>();
 
+export type EtatPipe = Pick<RapportPipe, "declencheur" | "acces" | "essais" | "motif"> & {
+  statut: Exclude<RapportPipe["statut"], "deja"> | "branchee";
+  regle?: string;
+  actionId?: string;
+};
+// Dernier rapport de chaque pipe, et l'action proposée pour elle : affichés sous le déclencheur dans screenpipe.
+const etats = new Map<string, EtatPipe>();
+
+/** État de chaque pipe « dès que » (GET /api/pipes/etat). La décision prise depuis et la règle active l'emportent sur le rapport. */
+export async function etatPipes(moteur: Moteur): Promise<Record<string, EtatPipe>> {
+  const res: Record<string, EtatPipe> = {};
+  for (const [nom, e] of etats) {
+    const a = e.actionId ? moteur.actions.get(e.actionId) : undefined;
+    if (!a || a.statut === "proposee") res[nom] = e;
+    else if (a.statut === "refusee") res[nom] = { ...e, statut: "refusee", motif: "branchement refusé", actionId: undefined };
+    else if (a.statut === "echec") res[nom] = { ...e, statut: "erreur", motif: a.erreur, actionId: undefined };
+    else res[nom] = { ...e, actionId: undefined }; // validée : la règle active, ci-dessous, dit « branchée »
+  }
+  const valides = await lireValides();
+  for (const r of moteur.regles.filter((r) => r.id.startsWith("pipe-des-que-") && r.active)) {
+    const nom = r.id.slice("pipe-des-que-".length);
+    res[nom] = { declencheur: valides[nom] ?? "", statut: "branchee", regle: resumeRegle(r) };
+  }
+  return res;
+}
+
 /** Validation humaine : l'action « pipe.brancher », validée dans la page, active la règle traduite. */
 executeurs["pipe.brancher"] = async (params, bus) => {
   if (!(bus instanceof Moteur)) throw new Error("pipe.brancher : moteur attendu");
@@ -206,6 +238,11 @@ executeurs["pipe.brancher"] = async (params, bus) => {
   const regle = params.regle as Regle | undefined;
   if (!regle || regle.id !== idReglePipe(pipe) || regle.alors.mode !== "fixe" || regle.alors.action !== "pipe.lancer" || regle.alors.params.pipe !== pipe) {
     throw new Error("règle de pipe invalide");
+  }
+  // Vérifié au moment de brancher : le déclencheur a pu changer, ou la pipe disparaître, depuis la proposition.
+  const cfg = (await lirePipes()).find((p) => p.config?.name === pipe)?.config;
+  if (!cfg || cfg.enabled === false || texteDeclencheur(cfg.trigger?.custom) !== params.declencheur) {
+    throw new Error("déclencheur modifié ou pipe retirée depuis la proposition : rien n'est branché");
   }
   bus.regles = [...bus.regles.filter((r) => r.id !== regle.id), { ...regle, active: true }];
   await bus.sauverRegles();
@@ -221,8 +258,8 @@ executeurs["pipe.brancher"] = async (params, bus) => {
  * déjà validée et inchangée → rien ; nouvelle ou modifiée → traduction, accès, essais, puis action à valider.
  * Une pipe retirée, désactivée ou sans déclencheur arrête sa règle.
  */
-export async function synchroniserAutomatiquement(moteur: Moteur): Promise<RapportPipe[]> {
-  const pipes = (await sp<{ data?: { config?: ConfigPipe }[] }>("/pipes")).data ?? [];
+async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
+  const pipes = await lirePipes();
   const valides = await lireValides();
   const rapports: RapportPipe[] = [];
   const presentes = new Set<string>();
@@ -248,6 +285,7 @@ export async function synchroniserAutomatiquement(moteur: Moteur): Promise<Rappo
     if (regle?.active) desactiver(regle, "déclencheur modifié dans screenpipe, à revalider");
     const r = await traduireDeclencheur(nom, titre, texte, cfg);
     rapports.push(r);
+    etats.set(nom, { declencheur: texte, statut: r.statut as EtatPipe["statut"], regle: r.regle && resumeRegle(r.regle), acces: r.acces, essais: r.essais, motif: r.motif });
     if (r.statut === "erreur") {
       moteur.journaliser("erreur", `pipe « ${nom} » : ${r.motif}`);
       continue; // réessayé à la prochaine synchronisation
@@ -262,12 +300,12 @@ export async function synchroniserAutomatiquement(moteur: Moteur): Promise<Rappo
       `Accès : ${r.acces!.map((a) => `${a.acces} ${a.ok ? "OK" : "MANQUE"} (${a.detail})`).join(" ; ")}`,
       `Essais rejoués par le moteur :\n${r.essais!.join("\n")}`,
     ].join("\n");
-    const si = conditionsTexte(r.regle!.desQue.si);
-    moteur.creerAction({
+    const action = moteur.creerAction({
       nom: "pipe.brancher",
-      params: { text: `Brancher la pipe « ${titre} » : dès que ${r.regle!.desQue.source}/${r.regle!.desQue.type}${si ? ` si ${si}` : ""} → lancer la pipe`, pipe: nom, declencheur: texte, regle: r.regle },
+      params: { text: `Brancher la pipe « ${titre} » : ${resumeRegle(r.regle!)}`, pipe: nom, declencheur: texte, regle: r.regle },
       preuve,
     });
+    etats.get(nom)!.actionId = action.id;
     moteur.journaliser("info", `pipe « ${nom} » traduite : branchement à valider`);
   }
 
@@ -276,8 +314,17 @@ export async function synchroniserAutomatiquement(moteur: Moteur): Promise<Rappo
     if (presentes.has(nom)) continue;
     desactiver(regle, "pipe retirée, désactivée ou sans déclencheur dans screenpipe");
     rapports.push({ pipe: nom, titre: nom, declencheur: "", statut: "retiree" });
+    etats.set(nom, { declencheur: "", statut: "retiree" });
   }
   if (reglesChangees) await moteur.sauverRegles();
   moteur.diffuser(moteur.etat());
   return rapports;
+}
+
+// Un passage à la fois (minuterie de main.ts et route API) : sinon deux traductions et deux propositions pour la même pipe.
+let file: Promise<unknown> = Promise.resolve();
+export function synchroniserAutomatiquement(moteur: Moteur): Promise<RapportPipe[]> {
+  const passage = file.then(() => synchroniser(moteur));
+  file = passage.catch(() => {});
+  return passage;
 }

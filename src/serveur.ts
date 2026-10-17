@@ -8,13 +8,23 @@ import { screenpipe, texteBrut, type NotificationScreenpipe } from "./screenpipe
 import * as pipesDesQue from "./pipes-des-que";
 import type { Evenement, MessageUI, Regle } from "./types";
 
-const json = (data: unknown, status = 200) => Response.json(data, { status });
+// L'appli screenpipe (webview Tauri) appelle le moteur depuis « Add trigger » : état des pipes, synchronisation,
+// Valider / Refuser, rien d'autre. Le clic sur Valider y reste la validation humaine.
+// ponytail: origine macOS et Linux ; sous Windows ce serait http://tauri.localhost.
+const ORIGINE_SCREENPIPE = "tauri://localhost";
+const ROUTES_SCREENPIPE = /^\/api\/(pipes\/(etat|synchroniser)|actions\/[\w-]+\/(valider|refuser))$/;
+const CORS = { "Access-Control-Allow-Origin": ORIGINE_SCREENPIPE, "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Allow-Headers": "content-type" };
+
+// CORS sur toutes les réponses JSON : il n'ouvre que la lecture à l'appli ; ce qu'elle peut appeler, origineAcceptee le décide.
+const json = (data: unknown, status = 200) => Response.json(data, { status, headers: CORS });
 
 /** Refuse un autre site (CSRF) et un nom de domaine qui pointerait vers 127.0.0.1 (DNS rebinding). */
 export function origineAcceptee(req: Request, port = config.port): boolean {
   const permis = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const origine = req.headers.get("origin");
-  return permis.has(req.headers.get("host") ?? "") && (!origine || permis.has(origine.replace(/^http:\/\//, "")));
+  if (!permis.has(req.headers.get("host") ?? "")) return false;
+  if (origine === ORIGINE_SCREENPIPE) return ROUTES_SCREENPIPE.test(new URL(req.url).pathname);
+  return !origine || permis.has(origine.replace(/^http:\/\//, ""));
 }
 
 /** Ce que l'appli screenpipe affiche pour un message du moteur ; null : rien. */
@@ -62,6 +72,7 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
 
     async fetch(req, server) {
       if (!origineAcceptee(req)) return json({ erreur: "origine refusée" }, 403);
+      if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS }); // préflight : n'exécute rien
       const url = new URL(req.url);
       const { pathname } = url;
 
@@ -116,6 +127,7 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
         }
 
         // Pont « dès que » : traduit les déclencheurs custom des pipes screenpipe en règles du moteur.
+        if (pathname === "/api/pipes/etat" && req.method === "GET") return json(await pipesDesQue.etatPipes(moteur));
         if (pathname === "/api/pipes/synchroniser" && req.method === "POST") {
           const rapports = await pipesDesQue.synchroniserAutomatiquement(moteur);
           const n = (s: string) => rapports.filter((r) => r.statut === s).length;

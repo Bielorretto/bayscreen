@@ -14,6 +14,16 @@ test("origineAcceptee : la page et curl passent, un autre site ou un autre nom n
   expect(origineAcceptee(req({ host: "piege.exemple.invalid:4300" }), 4300)).toBe(false); // DNS rebinding
 });
 
+test("origineAcceptee : l'appli screenpipe n'a que l'état des pipes, la synchronisation et Valider / Refuser", () => {
+  const depuisScreenpipe = (chemin: string, host = "127.0.0.1:4300") =>
+    new Request(`http://127.0.0.1:4300${chemin}`, { method: "POST", headers: { host, origin: "tauri://localhost" } });
+  for (const permis of ["/api/pipes/etat", "/api/pipes/synchroniser", "/api/actions/a1/valider", "/api/actions/a1/refuser"])
+    expect(origineAcceptee(depuisScreenpipe(permis), 4300)).toBe(true);
+  for (const refuse of ["/api/regles", "/api/evenements", "/api/etat", "/api/copilote/question", "/api/actions/a1/valider/x"])
+    expect(origineAcceptee(depuisScreenpipe(refuse), 4300)).toBe(false);
+  expect(origineAcceptee(depuisScreenpipe("/api/pipes/etat", "piege.exemple.invalid:4300"), 4300)).toBe(false);
+});
+
 const action = (a: Partial<Action>): Action => ({
   id: "a1",
   nom: "discord.envoyer",
