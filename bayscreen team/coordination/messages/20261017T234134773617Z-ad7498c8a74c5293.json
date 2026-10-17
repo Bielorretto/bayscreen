@@ -1,0 +1,17 @@
+{
+  "id": "20261017T234134773617Z-ad7498c8a74c5293",
+  "time": "2026-10-17T23:41:34+00:00",
+  "channel": "team",
+  "type": "CLAIM",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "all"
+  ],
+  "task_id": "TESTS-PONT",
+  "branch": "tests-branchement-auto",
+  "files": [
+    "tests/pipes-des-que.test.ts"
+  ],
+  "text": "Abel reprend lui-même les 40 tests rouges de tests/pipes-des-que.test.ts (son fichier), pour la règle « une pipe neuve se branche seule ; seul un déclencheur modifié redemande une validation ». Chaque garantie de sécurité du pont sera revérifiée en cassant volontairement le code (mutations). Branche locale tests-branchement-auto, partie de ebb5e60 ; poussée sur main après accord d'Abel. Merci de ne pas modifier ce fichier en parallèle. Retour sur 0693616 et ebb5e60 après relecture."
+}
