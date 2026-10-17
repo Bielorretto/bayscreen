@@ -45,6 +45,12 @@
   <div>
     <section><h2>Actions à valider</h2><div id="attente"><p class="doux">Rien en attente.</p></div></section>
     <section style="margin-top:16px"><h2>Historique des actions</h2><div id="historique"></div></section>
+    <section style="margin-top:16px">
+      <h2>Ce qu'on peut automatiser</h2>
+      <div id="connexions" class="doux"></div>
+      <div id="taches" style="margin-top:8px"></div>
+      <button style="margin-top:6px" onclick="chargerAutomatisables()">Actualiser</button>
+    </section>
   </div>
   <div>
     <section id="visio">
@@ -63,6 +69,32 @@
         <button type="submit">Envoyer</button>
       </form>
     </section>
+    <section style="margin-top:16px">
+      <h2>Créer une règle</h2>
+      <form id="form-regle">
+        <input id="r-nom" placeholder="Nom de la règle" required />
+        <div style="display:flex;gap:6px">
+          <select id="r-source"><option>web</option><option>mail</option><option>webhook</option><option>screenpipe</option><option>appel</option></select>
+          <input id="r-type" placeholder="type d'événement" required />
+        </div>
+        <div style="display:flex;gap:6px">
+          <input id="r-champ" placeholder="si : champ (facultatif)" />
+          <select id="r-op"><option value="egal">=</option><option value="contient">contient</option><option value="superieur">&gt;</option><option value="inferieur">&lt;</option></select>
+          <input id="r-valeur" placeholder="valeur" />
+        </div>
+        <select id="r-mode"><option value="fixe">action fixe</option><option value="ia">Claude choisit</option></select>
+        <div id="r-fixe" style="display:grid;gap:6px">
+          <input id="r-action" placeholder="exécuteur : notifier, slack.envoyer…" />
+          <textarea id="r-params" rows="2" placeholder='params JSON, ex. {"text":"Alerte"}'></textarea>
+        </div>
+        <div id="r-ia" style="display:none;gap:6px">
+          <textarea id="r-consigne" rows="2" placeholder="Consigne pour Claude"></textarea>
+          <input id="r-permises" value="notifier" placeholder="actions permises (séparées par une virgule)" />
+        </div>
+        <select id="r-validation"><option value="demander">validation demandée</option><option value="auto">auto</option></select>
+        <button type="submit">Créer</button>
+      </form>
+    </section>
   </div>
   <div>
     <section><h2>Règles</h2><div id="regles"></div></section>
@@ -76,8 +108,29 @@ const actions = new Map();
 let journal = [];
 let lignes = [];
 
+// Bip fiable : l'AudioContext est bloqué par les navigateurs tant que la page n'a pas
+// reçu d'interaction. On le débloque au premier clic/touche, et on double le son d'une
+// notification système (le panneau s'illumine de toute façon à l'arrivée du message « reveil »).
+let audio = null;
+const debloquerAudio = () => {
+  if (!audio) { try { audio = new AudioContext(); } catch {} }
+  if (audio && audio.state === "suspended") audio.resume();
+  try { if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission(); } catch {}
+};
+document.addEventListener("click", debloquerAudio);
+document.addEventListener("keydown", debloquerAudio);
 function bip() {
-  try { const ctx = new AudioContext(); const o = ctx.createOscillator(); o.frequency.value = 880; o.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.15); } catch {}
+  try {
+    const ctx = audio ?? new AudioContext();
+    if (ctx.state === "suspended") ctx.resume();
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.frequency.value = 880; g.gain.value = 0.3; o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + 0.18);
+  } catch {}
+  try {
+    if (typeof Notification !== "undefined" && Notification.permission === "granted")
+      new Notification("Dès que", { body: "L'assistant vous écoute" });
+  } catch {}
 }
 
 function rendreActions() {
@@ -132,6 +185,66 @@ function recevoir(m) {
     }
   }
 }
+
+$("r-mode").onchange = () => {
+  const ia = $("r-mode").value === "ia";
+  $("r-fixe").style.display = ia ? "none" : "grid";
+  $("r-ia").style.display = ia ? "grid" : "none";
+  if (ia) $("r-validation").value = "demander"; // « ia » impose « demander »
+};
+
+$("form-regle").onsubmit = async (e) => {
+  e.preventDefault();
+  const mode = $("r-mode").value;
+  let params;
+  try { params = JSON.parse($("r-params").value || "{}"); } catch { return alert("params JSON invalide"); }
+  const si = $("r-champ").value.trim() && $("r-valeur").value.trim()
+    ? [{ champ: $("r-champ").value.trim(), op: $("r-op").value, valeur: $("r-valeur").value.trim() }]
+    : undefined;
+  const regle = {
+    id: "regle-" + Date.now().toString(36),
+    nom: $("r-nom").value.trim(),
+    active: true,
+    desQue: { source: $("r-source").value, type: $("r-type").value.trim(), ...(si ? { si } : {}) },
+    alors: mode === "fixe"
+      ? { mode: "fixe", action: $("r-action").value.trim(), params }
+      : { mode: "ia", consigne: $("r-consigne").value.trim(), actionsPermises: $("r-permises").value.split(",").map((s) => s.trim()).filter(Boolean) },
+    validation: mode === "ia" ? "demander" : $("r-validation").value,
+  };
+  const r = await fetch("/api/regles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(regle) });
+  if (!r.ok) return alert((await r.json()).erreur);
+  $("form-regle").reset();
+};
+
+let tachesB = [];
+async function chargerAutomatisables() {
+  try {
+    const [conn, taches] = await Promise.all([
+      fetch("/api/connections").then((r) => r.json()),
+      fetch("/api/taches").then((r) => r.json()),
+    ]);
+    const liste = conn.data ?? conn ?? [];
+    const branchees = liste.filter((c) => c.connected === true || c.status === "connected");
+    $("connexions").textContent = `Ouverture : ${liste.length} intégrations, ${branchees.length} branchée(s)` +
+      (branchees.length ? ` — ${branchees.map((c) => c.id).join(", ")}` : "");
+    tachesB = taches ?? [];
+    $("taches").innerHTML = tachesB.map((t, i) => `
+      <div class="item"><b>${esc(t.nom)}</b> <span class="doux">${(t.applis ?? []).map(esc).join(", ")}</span>
+        ${(t.preuves ?? []).slice(0, 2).map((p) => `<div class="doux">${esc(String(p.date).slice(0, 10))} — « ${esc(String(p.extrait).slice(0, 100))} »</div>`).join("")}
+        <div style="margin-top:6px"><button onclick="creerRegle(${i})">Créer la règle</button></div></div>`).join("") ||
+      '<p class="doux">Aucune tâche détectée pour l\'instant.</p>';
+  } catch {
+    $("connexions").textContent = "connexions indisponibles";
+  }
+}
+async function creerRegle(i) {
+  const t = tachesB[i];
+  if (!t?.regle) return;
+  const r = await fetch("/api/regles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(t.regle) });
+  if (!r.ok) return alert((await r.json()).erreur);
+  alert(`Règle créée : ${t.regle.nom}`);
+}
+chargerAutomatisables();
 
 function connecter() {
   const ws = new WebSocket(`ws://${location.host}/ws`);

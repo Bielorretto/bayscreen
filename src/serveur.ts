@@ -4,6 +4,7 @@
 import { config } from "./config";
 import type { Copilote } from "./copilote";
 import type { Moteur } from "./moteur";
+import { screenpipe } from "./screenpipe";
 import type { Evenement, Regle } from "./types";
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
@@ -57,6 +58,15 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
           return json({ ok: true });
         }
 
+        // Brique B : l'ouverture vers l'extérieur et les tâches répétées (produites par Dev 1).
+        if (pathname === "/api/connections" && req.method === "GET") {
+          return json(await screenpipe.connexions());
+        }
+        if (pathname === "/api/taches" && req.method === "GET") {
+          const f = Bun.file(process.env.FICHIER_TACHES ?? "taches.json");
+          return json((await f.exists()) ? ((await f.json()) as unknown[]) : []);
+        }
+
         if (pathname === "/api/copilote/question" && req.method === "POST") {
           const { question } = (await req.json()) as { question?: string };
           if (!question?.trim()) return json({ erreur: "question vide" }, 400);
@@ -71,6 +81,9 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
     },
 
     websocket: {
+      // Bun ferme un WebSocket inactif après 10 s par défaut : la page se
+      // déconnectait toute seule (« la coupure à 10 s »). On tolère 4 min d'inactivité.
+      idleTimeout: 240,
       open(ws) {
         ws.subscribe("ui");
         ws.send(JSON.stringify(moteur.etat()));

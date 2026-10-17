@@ -47,7 +47,10 @@ export const executeurs: Record<string, Executeur> = {
   /** Lance un pipe screenpipe existant (POST /pipes/:id/run). */
   "pipe.lancer": async (params) => {
     if (typeof params.pipe !== "string") throw new Error("paramètre « pipe » manquant");
-    return screenpipe.lancerPipe(params.pipe);
+    const r = (await screenpipe.lancerPipe(params.pipe)) as Record<string, unknown> | null;
+    // screenpipe répond 200 même quand le pipe échoue : l'erreur est dans le corps.
+    if (r && typeof r === "object" && "error" in r) throw new Error(String(r.error).slice(0, 300));
+    return r;
   },
 
   // TODO Dev 2 : "mail.repondre", "notion.creer", "linear.creer" via /connections/:id/proxy/...
