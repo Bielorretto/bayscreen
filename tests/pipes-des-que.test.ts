@@ -981,6 +981,19 @@ test("relance : une exécution terminée normalement → une ligne d'info au jou
   expect(notifications).toEqual([]);
 });
 
+test("relance : une exécution arrêtée par l'utilisateur (cancelled) → une ligne d'info au journal, aucune notification", async () => {
+  const moteur = new Moteur(join(dossier, "regles-relance-arret.json"));
+  await brancher(moteur, "relance-arret");
+  notifications.length = 0;
+  // Ce que screenpipe enregistre pour un arrêt demandé (pipes/mod.rs, classify_pipe_process_result, was_cancelled).
+  executions.set("relance-arret", statuts({ status: "running" }, { id: 24, status: "cancelled", stderr: "", error_type: "cancelled", error_message: null }));
+  await moteur.emettre(prixCasque());
+  await attendre(() => lignesSuivi(moteur, "relance-arret").length > 0);
+  await Bun.sleep(20);
+  expect(lignesSuivi(moteur, "relance-arret")).toEqual([["info", "pipe « relance-arret » : exécution 24 arrêtée avant la fin (cancelled)"]]);
+  expect(notifications).toEqual([]);
+});
+
 test("relance : le suivi ne rallonge ni l'exécuteur pipe.lancer ni emettre (donc ni POST /api/evenements)", async () => {
   const moteur = new Moteur(join(dossier, "regles-relance-attente.json"));
   await brancher(moteur, "relance-attente");

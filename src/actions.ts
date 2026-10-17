@@ -25,8 +25,9 @@ export const suivi = { pasMs: 3_000, limiteMs: 15 * 60_000 };
 
 /**
  * Relève l'exécution jusqu'à un statut final (queued et running ne le sont pas), ou la limite ; ne lève jamais.
- * completed : une ligne d'info. Autre statut final (failed, timed_out, cancelled) : une alerte au journal et UNE notification
- * screenpipe, avec la cause et comment débloquer. stderr et error_message peuvent contenir ce que la pipe a lu (écran, mails) :
+ * completed, ou cancelled (arrêt demandé, neutre pour screenpipe aussi) : une ligne d'info. Autre statut final (failed,
+ * timed_out…) : une alerte au journal et UNE notification screenpipe, avec la cause et comment débloquer.
+ * stderr et error_message peuvent contenir ce que la pipe a lu (écran, mails) :
  * ils ne vont qu'au corps de la notification, nettoyés (causeLisible), jamais au journal, que GET /api/etat sert à toute requête locale.
  */
 async function suivreExecution(pipe: string, execution: number, bus: Bus) {
@@ -37,6 +38,7 @@ async function suivreExecution(pipe: string, execution: number, bus: Bus) {
       const e = (await screenpipe.executionPipe(pipe, execution))?.data;
       if (!e?.status || e.status === "queued" || e.status === "running") continue;
       if (e.status === "completed") return bus.journaliser("info", `${quoi} terminée`);
+      if (e.status === "cancelled") return bus.journaliser("info", `${quoi} arrêtée avant la fin (cancelled)`);
       const d = pourDebloquer(`${e.error_message ?? ""}\n${e.stderr ?? ""}`);
       bus.journaliser("alerte", `${quoi} en échec (${e.status}). ${d.texte}`);
       return await screenpipe.notifier({
