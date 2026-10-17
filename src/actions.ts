@@ -39,7 +39,7 @@ async function suivreExecution(pipe: string, execution: number, bus: Bus) {
       if (!e?.status || e.status === "queued" || e.status === "running") continue;
       if (e.status === "completed") return bus.journaliser("info", `${quoi} terminée`);
       if (e.status === "cancelled") return bus.journaliser("info", `${quoi} arrêtée avant la fin (cancelled)`);
-      const d = pourDebloquer(`${e.error_message ?? ""}\n${e.stderr ?? ""}`, "execution");
+      const d = pourDebloquer(`${e.error_message ?? ""}\n${e.stderr ?? ""}`, "execution")!;
       bus.journaliser("alerte", `${quoi} en échec (${e.status}). ${d.texte}`);
       return await screenpipe.notifier({
         pipe_name: "des-que",
@@ -67,12 +67,14 @@ const COMMUNS: Deblocage[] = [
 const REFUS_CONNEXION = /ECONNREFUSED|unable to connect|connection refused/i;
 const HISTORIQUE: Deblocage = [/^/, "ouvrez l'historique de la pipe dans screenpipe pour lire l'erreur complète."];
 /**
- * Tables fermées, dans l'ordre : le premier motif trouvé dans le texte d'erreur donne le conseil ; la dernière ligne, sinon.
- * Un refus de connexion n'y dit pas la même chose : au lancement (POST /run), c'est screenpipe qui ne répond pas ; dans une
- * exécution que screenpipe a rapportée (il répond donc), c'est un service que l'agent de la pipe appelle.
+ * Tables fermées, dans l'ordre : le premier motif trouvé dans le texte d'erreur donne le conseil. Un refus de connexion n'y
+ * dit pas la même chose : au lancement (POST /run), c'est screenpipe qui ne répond pas ; dans une exécution que screenpipe a
+ * rapportée (il répond donc), c'est un service que l'agent de la pipe appelle. Cause inconnue : dans une exécution,
+ * l'historique de la pipe a l'erreur complète ; un lancement refusé (pipe déjà en cours, introuvable…) n'y laisse rien,
+ * il n'a donc pas de conseil.
  */
 const DEBLOCAGES: Record<"lancement" | "execution", Deblocage[]> = {
-  lancement: [...COMMUNS, [REFUS_CONNEXION, "screenpipe ne répond pas ; relancez l'appli screenpipe, puis la pipe."], HISTORIQUE],
+  lancement: [...COMMUNS, [REFUS_CONNEXION, "screenpipe ne répond pas ; relancez l'appli screenpipe, puis la pipe."]],
   execution: [
     ...COMMUNS,
     [REFUS_CONNEXION, "l'agent de la pipe n'a pas pu joindre un service qu'il appelle (son fournisseur d'IA, Ollama par exemple s'il est arrêté, ou une autre API) ; démarrez ce service ou choisissez un autre préréglage IA dans les réglages de screenpipe, puis relancez la pipe.", REGLAGES],
@@ -82,12 +84,12 @@ const DEBLOCAGES: Record<"lancement" | "execution", Deblocage[]> = {
 
 /**
  * « Pour débloquer : … » d'après le texte d'une erreur de pipe : refus de lancement, ou error_message et stderr d'une exécution
- * (depuis = "execution"). Texte fixe : rien du texte d'erreur n'y passe. Bouton deeplink (ouvert par screenpipe en Rust, donc
- * fiable) quand un réglage s'y prête.
+ * (depuis = "execution", jamais undefined). Texte fixe : rien du texte d'erreur n'y passe. Bouton deeplink (ouvert par
+ * screenpipe en Rust, donc fiable) quand un réglage s'y prête.
  */
-export function pourDebloquer(erreur: string, depuis: keyof typeof DEBLOCAGES = "lancement"): { texte: string; bouton?: BoutonNotification } {
-  const [, conseil, bouton] = DEBLOCAGES[depuis].find(([motif]) => motif.test(erreur))!;
-  return { texte: `Pour débloquer : ${conseil}`, bouton };
+export function pourDebloquer(erreur: string, depuis: keyof typeof DEBLOCAGES = "lancement"): { texte: string; bouton?: BoutonNotification } | undefined {
+  const d = DEBLOCAGES[depuis].find(([motif]) => motif.test(erreur));
+  return d && { texte: `Pour débloquer : ${d[1]}`, bouton: d[2] };
 }
 
 /**

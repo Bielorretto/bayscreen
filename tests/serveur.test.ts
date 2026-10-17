@@ -59,6 +59,23 @@ test("notificationPour : une pipe que screenpipe ne lance pas dit comment déblo
   expect(echec("discord.envoyer", "webhook → 500")).toEqual({ pipe_name: "des-que", title: "Dès que : discord.envoyer en échec", body: texteBrut("webhook → 500"), priority: "high" });
 });
 
+test("notificationPour : un lancement refusé sans cause connue n'invente pas de conseil (aucune exécution, rien dans l'historique)", () => {
+  // Refus de screenpipe (pipes/mod.rs : start_pipe_background_inner, pipe_not_found_error) et du pont, avant toute exécution.
+  for (const erreur of [
+    "pipe 'veille-prix' is already running — you may already be executing inside this pipe. Do NOT run `screenpipe pipe run` from within a pipe.",
+    "pipe 'veille-prix' not found — directory does not exist: /Users/exemple/.screenpipe/pipes/veille-prix\nhint: install it first with `screenpipe pipe install <source>`",
+    "Screenpipe is serving saved history after Quit",
+    "pipe retirée, désactivée ou déclencheur modifié depuis la validation : non lancée",
+  ]) {
+    expect(notificationPour({ type: "action", action: action({ nom: "pipe.lancer", statut: "echec", erreur }) })).toEqual({
+      pipe_name: "des-que",
+      title: "Dès que : pipe.lancer en échec",
+      body: texteBrut(erreur),
+      priority: "high",
+    });
+  }
+});
+
 test("validerOuRefuser : depuis l'appli screenpipe, seulement le branchement d'une pipe qui existe", async () => {
   // Faux moteur : rien n'est exécuté, on note seulement les gestes qui passent.
   const gestes: string[] = [];

@@ -88,7 +88,7 @@ export function notificationPour(m: MessageUI): NotificationScreenpipe | null {
     };
   }
   if (m.type === "action" && m.action.statut === "echec") {
-    // Une pipe que screenpipe n'a pas lancée (préréglage IA, disque plein, appli fermée…) : dire comment débloquer.
+    // Une pipe que screenpipe n'a pas lancée (préréglage IA, disque plein, appli fermée…) : dire comment débloquer, si la cause est connue.
     const d = m.action.nom === "pipe.lancer" ? pourDebloquer(String(m.action.erreur ?? "")) : undefined;
     return {
       pipe_name: "des-que",
