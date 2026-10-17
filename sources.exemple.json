@@ -1,9 +1,9 @@
 [
   {
     "type": "web",
-    "nom": "Exemple : cours affiché sur une page",
-    "url": "https://example.com/",
+    "nom": "Casque audio",
+    "url": "http://127.0.0.1:4310/",
     "motif": "Prix\\s*:\\s*([\\d.,]+)",
-    "intervalleSecondes": 30
+    "intervalleSecondes": 5
   }
 ]
