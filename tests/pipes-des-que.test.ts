@@ -994,6 +994,23 @@ test("relance : une exécution arrêtée par l'utilisateur (cancelled) → une l
   expect(notifications).toEqual([]);
 });
 
+test("relance : un refus de connexion dans l'exécution (Ollama arrêté…) vise le service que l'agent appelle, pas screenpipe, qui vient de répondre", async () => {
+  const moteur = new Moteur(join(dossier, "regles-relance-service.json"));
+  await brancher(moteur, "relance-service");
+  notifications.length = 0;
+  const stderr = "Error: connect ECONNREFUSED 127.0.0.1:11434\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1607:16)\n";
+  executions.set("relance-service", () => ({ data: { id: 24, status: "failed", stderr, error_type: null, error_message: null } }));
+  await moteur.emettre(prixCasque());
+  await attendre(() => notifications.length > 0);
+  expect(notifications[0]).toMatchObject({
+    body:
+      `${vraiScreenpipe.texteBrut("Error: connect ECONNREFUSED 127.0.0.1:11434")}\n\nPour débloquer : l'agent de la pipe n'a pas pu joindre un service qu'il appelle ` +
+      "(son fournisseur d'IA, Ollama par exemple s'il est arrêté, ou une autre API) ; démarrez ce service ou choisissez un autre préréglage IA dans les réglages de screenpipe, puis relancez la pipe.",
+    actions: [{ id: "reglages", label: "Ouvrir les réglages", type: "deeplink", url: "screenpipe://settings" }],
+  });
+  expect(JSON.stringify([notifications, moteur.journal])).not.toContain("screenpipe ne répond pas");
+});
+
 test("relance : le suivi ne rallonge ni l'exécuteur pipe.lancer ni emettre (donc ni POST /api/evenements)", async () => {
   const moteur = new Moteur(join(dossier, "regles-relance-attente.json"));
   await brancher(moteur, "relance-attente");

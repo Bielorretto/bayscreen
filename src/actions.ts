@@ -39,7 +39,7 @@ async function suivreExecution(pipe: string, execution: number, bus: Bus) {
       if (!e?.status || e.status === "queued" || e.status === "running") continue;
       if (e.status === "completed") return bus.journaliser("info", `${quoi} terminée`);
       if (e.status === "cancelled") return bus.journaliser("info", `${quoi} arrêtée avant la fin (cancelled)`);
-      const d = pourDebloquer(`${e.error_message ?? ""}\n${e.stderr ?? ""}`);
+      const d = pourDebloquer(`${e.error_message ?? ""}\n${e.stderr ?? ""}`, "execution");
       bus.journaliser("alerte", `${quoi} en échec (${e.status}). ${d.texte}`);
       return await screenpipe.notifier({
         pipe_name: "des-que",
@@ -57,22 +57,36 @@ async function suivreExecution(pipe: string, execution: number, bus: Bus) {
 }
 
 const REGLAGES: BoutonNotification = { id: "reglages", label: "Ouvrir les réglages", type: "deeplink", url: "screenpipe://settings" };
-/** Table fermée, dans l'ordre : le premier motif trouvé dans le texte d'erreur donne le conseil ; la dernière ligne, sinon. */
-const DEBLOCAGES: [RegExp, string, BoutonNotification?][] = [
+type Deblocage = [RegExp, string, BoutonNotification?];
+const COMMUNS: Deblocage[] = [
   [/failed to load extension/i, "l'agent des pipes de screenpipe a une extension de version incompatible ; mettez screenpipe à jour ou ramenez l'extension à une version compatible, puis relancez la pipe."],
   [/not signed in|claude\.ai subscription/i, "dans les réglages IA de screenpipe, créez le préréglage « Claude API », collez-y votre clé, cliquez sur Test, puis sur l'étoile pour en faire le préréglage par défaut.", REGLAGES],
   [/no space left on device|ENOSPC/i, "le disque est plein ; libérez de la place, puis relancez la pipe.", { id: "stockage", label: "Libérer de la place", type: "deeplink", url: "screenpipe://settings?section=storage" }],
   [/api[ _-]?key|credit|quota|billing|usage limit/i, "clé refusée ou crédit épuisé ; vérifiez le préréglage IA dans les réglages de screenpipe (clé, crédit), puis relancez la pipe.", REGLAGES],
-  [/ECONNREFUSED|unable to connect|connection refused/i, "screenpipe ne répond pas ; relancez l'appli screenpipe, puis la pipe."],
-  [/^/, "ouvrez l'historique de la pipe dans screenpipe pour lire l'erreur complète."],
 ];
+const REFUS_CONNEXION = /ECONNREFUSED|unable to connect|connection refused/i;
+const HISTORIQUE: Deblocage = [/^/, "ouvrez l'historique de la pipe dans screenpipe pour lire l'erreur complète."];
+/**
+ * Tables fermées, dans l'ordre : le premier motif trouvé dans le texte d'erreur donne le conseil ; la dernière ligne, sinon.
+ * Un refus de connexion n'y dit pas la même chose : au lancement (POST /run), c'est screenpipe qui ne répond pas ; dans une
+ * exécution que screenpipe a rapportée (il répond donc), c'est un service que l'agent de la pipe appelle.
+ */
+const DEBLOCAGES: Record<"lancement" | "execution", Deblocage[]> = {
+  lancement: [...COMMUNS, [REFUS_CONNEXION, "screenpipe ne répond pas ; relancez l'appli screenpipe, puis la pipe."], HISTORIQUE],
+  execution: [
+    ...COMMUNS,
+    [REFUS_CONNEXION, "l'agent de la pipe n'a pas pu joindre un service qu'il appelle (son fournisseur d'IA, Ollama par exemple s'il est arrêté, ou une autre API) ; démarrez ce service ou choisissez un autre préréglage IA dans les réglages de screenpipe, puis relancez la pipe.", REGLAGES],
+    HISTORIQUE,
+  ],
+};
 
 /**
- * « Pour débloquer : … » d'après le texte d'une erreur de pipe (error_message et stderr, ou refus de lancement). Texte fixe :
- * rien du texte d'erreur n'y passe. Bouton deeplink (ouvert par screenpipe en Rust, donc fiable) quand un réglage s'y prête.
+ * « Pour débloquer : … » d'après le texte d'une erreur de pipe : refus de lancement, ou error_message et stderr d'une exécution
+ * (depuis = "execution"). Texte fixe : rien du texte d'erreur n'y passe. Bouton deeplink (ouvert par screenpipe en Rust, donc
+ * fiable) quand un réglage s'y prête.
  */
-export function pourDebloquer(erreur: string): { texte: string; bouton?: BoutonNotification } {
-  const [, conseil, bouton] = DEBLOCAGES.find(([motif]) => motif.test(erreur))!;
+export function pourDebloquer(erreur: string, depuis: keyof typeof DEBLOCAGES = "lancement"): { texte: string; bouton?: BoutonNotification } {
+  const [, conseil, bouton] = DEBLOCAGES[depuis].find(([motif]) => motif.test(erreur))!;
   return { texte: `Pour débloquer : ${conseil}`, bouton };
 }
 
