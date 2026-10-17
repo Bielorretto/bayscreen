@@ -92,6 +92,9 @@ export function pourDebloquer(erreur: string, depuis: keyof typeof DEBLOCAGES = 
   return d && { texte: `Pour débloquer : ${d[1]}`, bouton: d[2] };
 }
 
+/** Un jeton tiré au hasard : des chiffres et des lettres en casse mêlée (base64…), ou 32 caractères et plus (hexadécimal…). */
+const jeton = (m: string) => /\d/.test(m) && /[a-z]/i.test(m) && (m.length >= 32 || (/[a-z]/.test(m) && /[A-Z]/.test(m)));
+
 /**
  * Première ligne utile (une lettre ou un chiffre) du premier texte qui en a une, pour l'affichage seulement : sur une ligne,
  * 300 caractères au plus, tout ce qui ressemble à une clé masqué. Texte non fiable : jamais vers un modèle ni un shell.
@@ -103,9 +106,13 @@ export function causeLisible(...textes: unknown[]): string {
       return ligne
         .slice(0, 1_000) // borne le travail des expressions ci-dessous
         .replace(/[\s\p{C}]+/gu, " ")
-        .replace(/\b([\w-]*(?:api[_-]?key|token|secret|password))(["']?\s*[:=]\s*["']?)[^\s"',;&]+/gi, "$1$2[clé masquée]")
-        .replace(/\b(bearer)\s+\S+/gi, "$1 [clé masquée]")
+        .replace(/\\[nrt]/g, " ") // retour à la ligne échappé (JSON) : un espace
+        .replace(/-----BEGIN[^-]*-----.*/g, "[clé masquée]") // clé PEM : tout le reste de la ligne
+        .replace(/(\/\/[^\s/@:]+:)[^\s/@]+@/g, "$1[clé masquée]@") // mot de passe dans une URL
+        .replace(/\b(bearer|basic)\s+\S+/gi, "$1 [clé masquée]")
+        .replace(/\b([\w-]*(?:key|token|secret|passw(?:or)?d|cookie))(\\?["']?\s*[:=]\s*\\?["']?)(?!\[clé masquée\])[^\s"'\\,;&]+/gi, "$1$2[clé masquée]")
         .replace(/\bsk-[\w-]+/g, "[clé masquée]")
+        .replace(/[\w+=-]{20,}/g, (m) => (jeton(m) ? "[clé masquée]" : m)) // jeton nu (ghp_…, AIza…, JWT…)
         .trim()
         .slice(0, 300);
   }

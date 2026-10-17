@@ -86,3 +86,21 @@ test("causeLisible : première ligne utile, sur une ligne, 300 caractères au pl
   const cles = 'Bearer eyJhbGciOi.charge sk-ant-api03-AbC_dEf-123 sk-proj-Xyz ANTHROPIC_API_KEY=cle-anthropic {"api_key":"cle-json"} access_token: jeton-1 password=motdepasse';
   expect(causeLisible(cles)).toBe('Bearer [clé masquée] [clé masquée] [clé masquée] ANTHROPIC_API_KEY=[clé masquée] {"api_key":"[clé masquée]"} access_token: [clé masquée] password=[clé masquée]');
 });
+
+test("causeLisible : les autres formes courantes de clé (valeurs fictives) sont masquées aussi ; une cause ordinaire reste lisible", () => {
+  const cas: [string, string][] = [
+    ["curl: (22) 401 Authorization: Basic dXRpbGlzYXRldXI6ZmljdGlm", "curl: (22) 401 Authorization: Basic [clé masquée]"],
+    ["GET https://api.exemple.invalid/v1beta/models?key=AIzaFICTIF000000000000000000 → 403", "GET https://api.exemple.invalid/v1beta/models?key=[clé masquée] → 403"],
+    ["fatal: unable to access 'https://alice:mdp-fictif-42@git.exemple.invalid/depot.git/': 403", "fatal: unable to access 'https://alice:[clé masquée]@git.exemple.invalid/depot.git/': 403"],
+    ["aws_secret_access_key=FICTIFwJalrXUtnFEMIK7MDENGbPxRfiCY", "aws_secret_access_key=[clé masquée]"],
+    ['Error: corps={\\"api_key\\":\\"cle-fictive-123\\"}', 'Error: corps={\\"api_key\\":\\"[clé masquée]\\"}'], // JSON échappé
+    ['{"message":"config invalide :\\nsk-ant-api03-FICTIF-cle_00"}', '{"message":"config invalide : [clé masquée]"}'], // \n littéral
+    ["remote: Authorization: token ghp_FICTIF000000000000000000000000000", "remote: Authorization: token [clé masquée]"],
+    ['{"type":"service_account","private_key":"-----BEGIN PRIVATE KEY-----\\nMIIEvFICTIFcleprivee"}', '{"type":"service_account","private_key":"[clé masquée]'],
+    ["Cookie: session=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmaWN0aWYifQ.c2lnbmF0dXJlLWZpY3RpdmU", "Cookie: [clé masquée]"],
+    ["Error: invalid token 0123456789abcdef0123456789abcdef", "Error: invalid token [clé masquée]"], // hexadécimal, sans nom
+    // Rien à masquer : un modèle, une date, une architecture restent lisibles.
+    ["model claude-3-5-sonnet-20241022 not found at 2026-10-17T12:06:00.123Z on aarch64-apple-darwin", "model claude-3-5-sonnet-20241022 not found at 2026-10-17T12:06:00.123Z on aarch64-apple-darwin"],
+  ];
+  expect(cas.map(([entree]) => causeLisible(entree))).toEqual(cas.map(([, attendu]) => attendu));
+});
