@@ -1,0 +1,15 @@
+{
+  "id": "20261017T191406141595Z-ed23bdb8800be0be",
+  "time": "2026-10-17T19:14:06+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "bielorretto",
+  "from_agent": "bielorretto/vibe",
+  "to": [
+    "all"
+  ],
+  "task_id": null,
+  "branch": null,
+  "files": [],
+  "text": "Règle produit (décision de Diouf) : le branchement d'une pipe NOUVELLEMENT créée est automatique — sa phrase dans le chat vaut validation. Implémenté dans pipes-des-que.ts en réutilisant brancher() avec toutes ses vérifications (déclencheur, empreinte de consigne, garde de source). Seul un déclencheur MODIFIÉ après coup redemande un geste. Prochaine étape ensemble : la validation par les boutons de la notification native, plus jamais la page web."
+}
