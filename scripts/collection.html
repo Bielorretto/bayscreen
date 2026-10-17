@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collection Été 2027 · Atelier Démo</title>
+<style>
+  :root { --couleur: #2563eb; --fond: #f7f5f2; --texte: #1c1917; --doux: #78716c; --carte: #ffffff; --bord: #e7e5e4; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fond); color: var(--texte); }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 2rem clamp(1rem, 4vw, 3rem) 1rem; }
+  .marque { font-size: .8rem; letter-spacing: .18em; text-transform: uppercase; color: var(--doux); }
+  h1 { margin: .3rem 0 0; font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 600; letter-spacing: -.02em; }
+  .etat { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--doux); }
+  .pastille { width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--couleur); transition: background .8s ease; box-shadow: 0 0 0 3px #fff, 0 0 0 4px var(--bord); }
+  .direct::before { content: ""; display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: #16a34a; margin-right: .35rem; animation: pouls 1.6s infinite; }
+  @keyframes pouls { 50% { opacity: .25; } }
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 1rem; padding: 1rem clamp(1rem, 4vw, 3rem) 3rem; }
+  .modele { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 1.2rem 1.2rem 1rem; }
+  .modele svg { width: 100%; height: auto; display: block; }
+  .cuir { fill: var(--couleur); transition: fill .8s ease; }
+  .semelle { fill: #e7e5e4; }
+  .detail { fill: none; stroke: #ffffffcc; stroke-width: 2.2; stroke-linecap: round; }
+  .nom { margin: .8rem 0 .1rem; font-weight: 600; }
+  .prix { color: var(--doux); font-size: .9rem; }
+  #toast { position: fixed; left: 50%; bottom: 1.5rem; transform: translate(-50%, 2rem); opacity: 0; transition: all .4s ease; background: var(--texte); color: #fff; padding: .8rem 1.1rem; border-radius: 10px; font-size: .95rem; max-width: calc(100% - 2rem); }
+  #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+</style>
+<body>
+  <header>
+    <div>
+      <div class="marque">Atelier Démo · données fictives</div>
+      <h1>Collection Été 2027</h1>
+    </div>
+    <div class="etat"><span class="pastille"></span><span>Coloris : <strong id="couleur">…</strong></span><span class="direct">en direct</span></div>
+  </header>
+  <main>
+    <article class="modele">
+      <svg viewBox="0 0 200 100" aria-hidden="true">
+        <path class="semelle" d="M8 78 Q8 90 20 90 H186 Q196 90 196 80 V75 H8 Z"/>
+        <path class="cuir" d="M12 76 C12 60 28 52 50 50 L78 34 Q90 27 102 34 L122 46 C152 50 180 56 193 70 L194 76 Z"/>
+        <path class="detail" d="M84 42 L96 50 M78 48 L90 56 M72 54 L84 62"/>
+      </svg>
+      <div class="nom">Aube</div><div class="prix">Basket basse · 119 €</div>
+    </article>
+    <article class="modele">
+      <svg viewBox="0 0 200 100" aria-hidden="true">
+        <path class="semelle" d="M14 80 Q14 90 26 90 H182 Q192 90 192 82 V78 H14 Z"/>
+        <path class="cuir" d="M16 78 C16 58 56 50 100 50 C148 50 184 60 190 78 Z"/>
+        <path class="detail" d="M60 60 C80 54 120 54 140 60"/>
+      </svg>
+      <div class="nom">Rive</div><div class="prix">Mocassin · 139 €</div>
+    </article>
+    <article class="modele">
+      <svg viewBox="0 0 200 100" aria-hidden="true">
+        <path class="semelle" d="M24 84 Q24 92 34 92 H184 Q194 92 194 84 V80 H24 Z"/>
+        <path class="cuir" d="M30 82 V18 Q30 12 38 12 H76 Q84 12 84 20 L88 56 C122 58 168 62 188 76 L190 82 Z"/>
+        <path class="detail" d="M40 30 H74 M40 42 H76"/>
+      </svg>
+      <div class="nom">Quai</div><div class="prix">Bottine · 189 €</div>
+    </article>
+    <article class="modele">
+      <svg viewBox="0 0 200 100" aria-hidden="true">
+        <path class="semelle" d="M10 82 Q10 90 22 90 H184 Q194 90 194 82 V78 H10 Z"/>
+        <path class="cuir" d="M36 78 C40 60 58 56 70 60 L74 78 Z M92 78 C96 54 120 50 134 58 L138 78 Z M150 78 C154 62 172 60 182 68 L184 78 Z"/>
+      </svg>
+      <div class="nom">Dune</div><div class="prix">Sandale · 89 €</div>
+    </article>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+<script>
+  // Relevé de l'état toutes les secondes : la couleur change quand une pipe l'a demandé.
+  let actuelle = null;
+  const toast = document.getElementById("toast");
+  async function relever() {
+    try {
+      const r = await fetch("/collection/etat", { cache: "no-store" });
+      if (!r.ok) return;
+      const e = await r.json();
+      document.documentElement.style.setProperty("--couleur", e.hex);
+      document.getElementById("couleur").textContent = e.couleur;
+      if (actuelle !== null && e.couleur !== actuelle && e.modifieeLe) {
+        const heure = new Date(e.modifieeLe).toLocaleTimeString("fr-FR");
+        toast.textContent = `Coloris passé au ${e.couleur} par « ${e.par || "inconnu"} » à ${heure}`;
+        toast.classList.add("visible");
+        setTimeout(() => toast.classList.remove("visible"), 6000);
+      }
+      actuelle = e.couleur;
+    } catch {}
+  }
+  relever();
+  setInterval(relever, 1000);
+</script>
+</body>
+</html>
