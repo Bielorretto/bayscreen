@@ -6,3 +6,4 @@ sources.json
 data/
 *.log
 .DS_Store
+regles.local.json

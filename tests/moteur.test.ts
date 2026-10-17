@@ -107,3 +107,27 @@ describe("Moteur", () => {
     expect(a!.statut).toBe("echec");
   });
 });
+
+test("règles communes et locales : le fichier commun n'est jamais réécrit, ce qui change ici va dans le fichier local", async () => {
+  const { mkdtempSync, readFileSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const dossier = mkdtempSync(join(tmpdir(), "regles-"));
+  const commun = join(dossier, "regles.json");
+  const local = join(dossier, "regles.local.json");
+  const autre = { ...regleSeuil, id: "r2", nom: "autre" };
+  writeFileSync(commun, JSON.stringify([regleSeuil, autre], null, 2));
+  const avant = readFileSync(commun, "utf8");
+
+  const m = new Moteur(commun, undefined, undefined, local);
+  await m.charger();
+  // Comme le pont qui désactive une règle, puis une règle créée dans la page.
+  m.regles = [regleSeuil, { ...autre, active: false }, { ...regleSeuil, id: "fr-1", nom: "créée ici" }];
+  await m.sauverRegles();
+
+  expect(readFileSync(commun, "utf8")).toBe(avant);
+  expect((JSON.parse(readFileSync(local, "utf8")) as Regle[]).map((r) => r.id)).toEqual(["r2", "fr-1"]);
+  const relu = new Moteur(commun, undefined, undefined, local);
+  await relu.charger();
+  expect(relu.regles.map((r) => [r.id, r.active])).toEqual([["r1", true], ["r2", false], ["fr-1", true]]);
+});

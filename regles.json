@@ -139,29 +139,5 @@
       }
     },
     "validation": "auto"
-  },
-  {
-    "id": "pipe-des-que-test-app-active",
-    "nom": "Test app active — dès que (déclencheur de pipe screenpipe)",
-    "active": true,
-    "desQue": {
-      "source": "screenpipe",
-      "type": "app_active",
-      "si": [
-        {
-          "champ": "app",
-          "op": "egal",
-          "valeur": "Safari"
-        }
-      ]
-    },
-    "alors": {
-      "mode": "fixe",
-      "action": "pipe.lancer",
-      "params": {
-        "pipe": "test-app-active"
-      }
-    },
-    "validation": "auto"
   }
 ]

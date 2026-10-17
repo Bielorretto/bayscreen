@@ -26,6 +26,8 @@ export const config = {
   discordMention: process.env.DISCORD_MENTION ?? "",
 
   fichierRegles: process.env.FICHIER_REGLES ?? "regles.json",
+  /** Règles propres à cette machine (pipes, règles créées ici), hors git : regles.json reste commun et n'est jamais réécrit. */
+  fichierReglesLocales: process.env.FICHIER_REGLES_LOCALES ?? "regles.local.json",
   fichierSources: process.env.FICHIER_SOURCES ?? "sources.json",
 };
 

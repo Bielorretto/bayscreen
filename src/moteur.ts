@@ -48,20 +48,35 @@ export class Moteur implements Bus {
   journal: LigneJournal[] = [];
   private abonnes = new Set<(m: MessageUI) => void>();
 
+  /** Règles du fichier commun telles que lues, par id : ce qui en diffère est propre à cette machine. */
+  private communes = new Map<string, string>();
+
   constructor(
     private fichierRegles: string,
     private memoire: typeof souvenirs = souvenirs,
     private demander: typeof demanderJSON = demanderJSON,
+    /**
+     * Règles propres à cette machine (pipes de son screenpipe, règles créées dans sa page, règle commune modifiée),
+     * hors git. Avec lui, le fichier commun n'est jamais réécrit ; sans lui, tout reste dans fichierRegles.
+     */
+    private fichierLocal?: string,
   ) {}
 
   async charger() {
-    const f = Bun.file(this.fichierRegles);
-    this.regles = (await f.exists()) ? ((await f.json()) as Regle[]) : [];
-    this.journaliser("info", `${this.regles.length} règle(s) chargée(s)`);
+    const lire = async (chemin?: string) => (chemin && (await Bun.file(chemin).exists()) ? ((await Bun.file(chemin).json()) as Regle[]) : []);
+    const communes = await lire(this.fichierRegles);
+    const locales = await lire(this.fichierLocal);
+    this.communes = new Map(communes.map((r) => [r.id, JSON.stringify(r)]));
+    const remplacees = new Set(locales.map((r) => r.id));
+    this.regles = [...communes.filter((r) => !remplacees.has(r.id)), ...locales];
+    this.journaliser("info", `${this.regles.length} règle(s) chargée(s)${locales.length ? `, dont ${locales.length} propre(s) à cette machine` : ""}`);
   }
 
   async sauverRegles() {
-    await Bun.write(this.fichierRegles, JSON.stringify(this.regles, null, 2));
+    if (!this.fichierLocal) return void (await Bun.write(this.fichierRegles, JSON.stringify(this.regles, null, 2) + "\n"));
+    // shortcut: une règle commune retirée ici reviendrait au redémarrage ; le moteur n'en retire aucune aujourd'hui.
+    const locales = this.regles.filter((r) => this.communes.get(r.id) !== JSON.stringify(r));
+    await Bun.write(this.fichierLocal, JSON.stringify(locales, null, 2) + "\n");
   }
 
   abonner(f: (m: MessageUI) => void) {

@@ -14,7 +14,7 @@ import { surveillerApp } from "./sources/app";
 /** Événements screenpipe transmis au moteur de règles (les autres ne servent qu'au copilote). */
 const TYPES_POUR_LE_MOTEUR = new Set(["meeting_started", "meeting_ended", "workflow_event", "connection_trigger"]);
 
-const moteur = new Moteur(config.fichierRegles);
+const moteur = new Moteur(config.fichierRegles, undefined, undefined, config.fichierReglesLocales);
 await moteur.charger();
 
 const copilote = new Copilote(moteur, config.phrasesAppel, (meetingId, question, transcription) =>
