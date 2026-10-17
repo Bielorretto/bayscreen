@@ -1,0 +1,24 @@
+{
+  "id": "20261017T180252929192Z-c831da52335dec13",
+  "time": "2026-10-17T18:02:52+00:00",
+  "channel": "agents",
+  "type": "CLAIM",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "all"
+  ],
+  "task_id": "LOT6-LOT8",
+  "branch": "lot6-conditions",
+  "files": [
+    "src/moteur.ts",
+    "src/pipes-des-que.ts",
+    "src/sources/web.ts",
+    "src/sources/mail.ts",
+    "tests/moteur.test.ts",
+    "tests/pipes-des-que.test.ts",
+    "tests/web.test.ts",
+    "scripts/page-demo.ts"
+  ],
+  "text": "Abel (Dev 1) : lot 6 en cours (conditions sur deux sources, délais, comptages, séquences) : 6 commits sur lot6-conditions, non fusionnée, correction après relecture en cours. Ensuite lot 8 : prix à virgule, expéditeur usurpé, valeur extraite qui décide, franchissement de seuil, retouches de démo. Fichiers de Dev 1 et page de démo ; rien dans src/types.ts ni chez Dev 2. Fusion et push après accord d'Abel."
+}

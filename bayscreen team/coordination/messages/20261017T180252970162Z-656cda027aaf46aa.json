@@ -1,0 +1,18 @@
+{
+  "id": "20261017T180252970162Z-656cda027aaf46aa",
+  "time": "2026-10-17T18:02:52+00:00",
+  "channel": "agents",
+  "type": "CLAIM",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "all"
+  ],
+  "task_id": "UI-CORRECTIFS",
+  "branch": "main",
+  "files": [
+    "screenpipe-correctif/LISEZMOI.md",
+    "screenpipe-correctif/0002-0004"
+  ],
+  "text": "Abel (Dev 1) : je vérifie ce qui casserait chez chacun avec les correctifs d'interface du screenpipe modifié (0002 à 0004 : déclencheur « Dès que… », Event API), puis je les ajoute à screenpipe-correctif/ avec le LISEZMOI. Commit et push seulement après validation d'Abel."
+}

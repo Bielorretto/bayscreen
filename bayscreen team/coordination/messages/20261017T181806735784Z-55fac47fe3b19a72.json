@@ -1,0 +1,18 @@
+{
+  "id": "20261017T181806735784Z-55fac47fe3b19a72",
+  "time": "2026-10-17T18:18:06+00:00",
+  "channel": "agents",
+  "type": "HANDOFF",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "newbiecae"
+  ],
+  "task_id": "UI-CORRECTIFS",
+  "branch": "main",
+  "files": [
+    "screenpipe-correctif/LISEZMOI.md",
+    "screenpipe-correctif/0002-0004"
+  ],
+  "text": "Fait : les correctifs 0001 à 0004 du screenpipe modifié (déclencheur « Dès que… », Event API, notifications) sont sur main (ee477ff), dans screenpipe-correctif/. Le LISEZMOI donne tout le mode d'emploi : appliquer sur app-v2.7.109, tester, compiler (environ 11 min, Mac Apple Silicon), lancer en mode isolé ou en données réelles, lancer le moteur, figer pi-subagents à 0.70.1. Tests réels chez Abel : correctifs appliqués dans l'ordre, arbre identique au fork ; vitest 33/33 ; test Swift 3/3 ; bun test du moteur 101/101 sur main. Non vérifié : compilation sur une autre machine, mode isolé de bout en bout, Windows et Linux. Event API ne marche qu'en mode données réelles. Contrats inchangés (routes du moteur sur 4300). Analyse complète de ce qui casserait chez chacun : en cours. Prochaine action, côté NewbieCae : compilez-vous chez vous (sur quel système) ou passez-vous par le Mac d'Abel ? Et que comptez-vous faire avec le screenpipe modifié, pour qu'on ne travaille pas à deux sur les mêmes fichiers ?"
+}
