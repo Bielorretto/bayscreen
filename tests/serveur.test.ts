@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { config } from "../src/config";
-import { notificationPour, origineAcceptee, validerOuRefuser } from "../src/serveur";
-import type { Action } from "../src/types";
+import { notificationPour, origineAcceptee, poserRegle, validerOuRefuser } from "../src/serveur";
+import type { Action, MessageUI, Regle } from "../src/types";
 
 const req = (headers: Record<string, string>) =>
   new Request("http://127.0.0.1:4300/api/regles", { method: "POST", headers });
@@ -71,4 +71,21 @@ test("validerOuRefuser : depuis l'appli screenpipe, seulement le branchement d'u
   expect((await geste("a-discord", "valider")).status).toBe(200);
   expect((await geste("a-discord", "refuser", "http://127.0.0.1:4300")).status).toBe(200);
   expect(gestes).toEqual(["valider a-pipe", "refuser a-pipe", "valider a-discord", "refuser a-discord"]);
+});
+
+test("poserRegle : la règle d'une pipe screenpipe ne se pose pas par l'API, les autres oui", async () => {
+  const sauvees: string[][] = [];
+  const moteur = {
+    regles: [] as Regle[],
+    sauverRegles: async () => void sauvees.push(moteur.regles.map((r) => r.id)),
+    diffuser: () => {},
+    etat: (): MessageUI => ({ type: "etat", regles: [], actions: [], journal: [] }),
+  };
+  const regle = (id: string): Regle => ({ id, nom: id, active: true, desQue: { source: "mail", type: "mail_recu" }, alors: { mode: "fixe", action: "pipe.lancer", params: { pipe: "alerte-e" } }, validation: "auto" });
+  const refus = await poserRegle(moteur, regle("pipe-des-que-alerte-e"));
+  expect(refus.status).toBe(403);
+  expect(await refus.json()).toHaveProperty("erreur");
+  expect(sauvees).toEqual([]);
+  expect((await poserRegle(moteur, regle("ma-regle"))).status).toBe(200);
+  expect(sauvees).toEqual([["ma-regle"]]);
 });

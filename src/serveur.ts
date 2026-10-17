@@ -41,6 +41,21 @@ export async function validerOuRefuser(req: Request, moteur: Pick<Moteur, "actio
   return json({ ok: true });
 }
 
+/**
+ * POST /api/regles : ajoute ou remplace une règle. Jamais celle d'une pipe screenpipe (« pipe-des-que-… ») : elle ne
+ * s'arme que par la validation humaine de son branchement (pipes-des-que.ts), pas par l'API.
+ */
+export async function poserRegle(moteur: Pick<Moteur, "regles" | "sauverRegles" | "diffuser" | "etat">, regle: Regle): Promise<Response> {
+  if (!regle.id || !regle.desQue || !regle.alors) return json({ erreur: "règle incomplète" }, 400);
+  if (String(regle.id).startsWith(pipesDesQue.idReglePipe(""))) {
+    return json({ erreur: "la règle d'une pipe screenpipe ne se pose que par la validation de son branchement" }, 403);
+  }
+  moteur.regles = [...moteur.regles.filter((r) => r.id !== regle.id), regle];
+  await moteur.sauverRegles();
+  moteur.diffuser(moteur.etat());
+  return json({ ok: true });
+}
+
 /** Ce que l'appli screenpipe affiche pour un message du moteur ; null : rien. */
 /** Deeplink screenpipe://chat/new (préremplit le chat, n'envoie jamais rien seul) : demande à l'agent du chat de valider ou refuser l'action. */
 export function demandeChat(a: { id: string; nom: string; params: Record<string, unknown> }, geste: "valider" | "refuser"): string {
@@ -117,14 +132,7 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
         if (m && req.method === "POST") return await validerOuRefuser(req, moteur, m[1]!, m[2]!);
 
         if (pathname === "/api/regles" && req.method === "GET") return json(moteur.regles);
-        if (pathname === "/api/regles" && req.method === "POST") {
-          const regle = (await req.json()) as Regle;
-          if (!regle.id || !regle.desQue || !regle.alors) return json({ erreur: "règle incomplète" }, 400);
-          moteur.regles = [...moteur.regles.filter((r) => r.id !== regle.id), regle];
-          await moteur.sauverRegles();
-          moteur.diffuser(moteur.etat());
-          return json({ ok: true });
-        }
+        if (pathname === "/api/regles" && req.method === "POST") return await poserRegle(moteur, (await req.json()) as Regle);
 
         // Brique B : l'ouverture vers l'extérieur et les tâches répétées (produites par Dev 1).
         if (pathname === "/api/connections" && req.method === "GET") {

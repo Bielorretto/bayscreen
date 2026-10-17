@@ -38,12 +38,8 @@ describe("conditions et correspondance", () => {
   test("remplir remplace les {{champs}}", () => {
     expect(remplir({ text: "{{nom}} = {{v.x}}" }, { nom: "cours", v: { x: 3 } })).toEqual({ text: "cours = 3" });
   });
-  test("remplir : « {{*}} » seul devient une copie des données entières ; dans un texte, il reste tel quel", () => {
-    const donnees = { nom: "Casque audio", valeur: 75, detail: { avant: 129 } };
-    const p = remplir({ pipe: "alerte-casque", evenement: "{{*}}", liste: ["{{*}}"], text: "prix : {{*}}" }, donnees);
-    expect(p).toEqual({ pipe: "alerte-casque", evenement: donnees, liste: [donnees], text: "prix : {{*}}" });
-    p.evenement.detail.avant = 0; // une copie : l'événement d'origine ne bouge pas
-    expect(donnees.detail.avant).toBe(129);
+  test("remplir : pas de joker « {{*}} », rien ne copie l'événement entier", () => {
+    expect(remplir({ evenement: "{{*}}", text: "prix : {{*}}" }, { nom: "Casque audio", corps: "texte d'un mail" })).toEqual({ evenement: "{{*}}", text: "prix : {{*}}" });
   });
 });
 
