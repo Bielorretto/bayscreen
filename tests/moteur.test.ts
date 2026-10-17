@@ -1,6 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { conditionVraie, Moteur, regleCorrespond, remplir } from "../src/moteur";
+import { screenpipe, texteBrut } from "../src/screenpipe";
 import type { Evenement, Regle } from "../src/types";
+
+// L'exécuteur notifier écrit dans l'appli screenpipe : pas de vraie notification pendant les tests.
+const notif = spyOn(screenpipe, "notifier").mockResolvedValue(undefined);
+afterAll(() => notif.mockRestore());
 
 const evt = (donnees: Record<string, unknown>): Evenement => ({
   id: "e1",
@@ -46,6 +51,7 @@ describe("Moteur", () => {
     expect(actions).toHaveLength(1);
     expect(actions[0]).toMatchObject({ nom: "notifier", statut: "executee", params: { text: "cours vaut 120" } });
     expect(statutsDiffuses).not.toContain("proposee");
+    expect(notif).toHaveBeenLastCalledWith(expect.objectContaining({ pipe_name: "des-que", body: texteBrut("cours vaut 120") }));
   });
 
   test("règle fixe à valider : l'action attend, puis s'exécute à la validation", async () => {

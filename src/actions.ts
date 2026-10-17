@@ -1,7 +1,7 @@
 // Propriétaire : Dev 2. Les exécuteurs : ce que le moteur sait faire dans le monde extérieur.
 // Ajouter un exécuteur = ajouter une entrée ici, puis l'autoriser dans les règles.
 
-import { screenpipe } from "./screenpipe";
+import { screenpipe, texteBrut } from "./screenpipe";
 import type { Bus } from "./types";
 
 export type Executeur = (params: Record<string, unknown>, bus: Bus) => Promise<unknown>;
@@ -13,12 +13,16 @@ function texte(params: Record<string, unknown>, cle = "text"): string {
 }
 
 export const executeurs: Record<string, Executeur> = {
-  /** Toujours disponible : affiche une notification dans la page (et dans le journal). */
+  /** Toujours disponible : notification dans l'appli screenpipe (et dans le journal). */
   notifier: async (params, bus) => {
     const message = texte(params);
     bus.journaliser("alerte", `Notification : ${message}`);
+    await screenpipe.notifier({ pipe_name: "des-que", title: "Dès que", body: texteBrut(message) });
     return { affiche: true };
   },
+
+  /** Message Discord par le webhook rangé dans screenpipe ; sert quand on valide depuis la page ou l'API. */
+  "discord.envoyer": async (params) => screenpipe.discordEnvoyer({ content: texte(params, "content") }),
 
   /** Message Slack via la connexion Slack de screenpipe (la connecter dans l'appli d'abord). */
   "slack.envoyer": async (params) =>

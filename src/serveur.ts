@@ -4,10 +4,43 @@
 import { config } from "./config";
 import type { Copilote } from "./copilote";
 import type { Moteur } from "./moteur";
-import { screenpipe } from "./screenpipe";
-import type { Evenement, Regle } from "./types";
+import { corpsDiscord, screenpipe, texteBrut, type BoutonNotification, type NotificationScreenpipe } from "./screenpipe";
+import type { Evenement, MessageUI, Regle } from "./types";
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
+
+/** Refuse un autre site (CSRF) et un nom de domaine qui pointerait vers 127.0.0.1 (DNS rebinding). */
+export function origineAcceptee(req: Request, port = config.port): boolean {
+  const permis = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+  const origine = req.headers.get("origin");
+  return permis.has(req.headers.get("host") ?? "") && (!origine || permis.has(origine.replace(/^http:\/\//, "")));
+}
+
+/** Ce que l'appli screenpipe affiche pour un message du moteur ; null : rien. */
+export function notificationPour(m: MessageUI): NotificationScreenpipe | null {
+  if (m.type === "action" && m.action.statut === "proposee") {
+    const a = m.action;
+    const contenu = String(a.params.content ?? a.params.text ?? JSON.stringify(a.params));
+    const boutons: BoutonNotification[] = [{ id: "refuser", label: "Refuser", type: "dismiss" }];
+    // Un bouton ne peut viser que l'API screenpipe (vérifié) : c'est screenpipe qui envoie, avec sa clé.
+    if (a.nom === "discord.envoyer")
+      boutons.unshift({ id: "envoyer", label: "Envoyer sur Discord", type: "api", url: "/connections/discord/proxy", method: "POST", body: corpsDiscord(contenu) });
+    return {
+      pipe_name: "des-que",
+      title: `Dès que : ${a.nom} à valider`,
+      body: texteBrut(contenu) + (a.preuve ? `\n\nPourquoi :\n${texteBrut(a.preuve)}` : ""),
+      priority: "high",
+      timeout_secs: 0,
+      actions: boutons,
+    };
+  }
+  if (m.type === "action" && m.action.statut === "echec")
+    return { pipe_name: "des-que", title: `Dès que : ${m.action.nom} en échec`, body: texteBrut(m.action.erreur), priority: "high" };
+  if (m.type === "reveil") return { pipe_name: "des-que", title: "Dès que : je vous écoute", body: "Posez votre question.", priority: "low", timeout_secs: 8 };
+  if (m.type === "reponse")
+    return { pipe_name: "des-que", title: "Dès que : réponse", body: `${texteBrut(m.question)}\n\n${texteBrut(m.reponse)}`, timeout_secs: 0 };
+  return null;
+}
 
 export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
   const serveur = Bun.serve({
@@ -15,6 +48,7 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
     port: config.port,
 
     async fetch(req, server) {
+      if (!origineAcceptee(req)) return json({ erreur: "origine refusée" }, 403);
       const url = new URL(req.url);
       const { pathname } = url;
 
@@ -63,7 +97,8 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
           return json(await screenpipe.connexions());
         }
         if (pathname === "/api/taches" && req.method === "GET") {
-          const f = Bun.file(process.env.FICHIER_TACHES ?? "taches.json");
+          // data/ est ignoré par git : ce fichier contient des extraits de la vraie mémoire.
+          const f = Bun.file(process.env.FICHIER_TACHES ?? "data/taches.json");
           return json((await f.exists()) ? ((await f.json()) as unknown[]) : []);
         }
 
@@ -96,5 +131,10 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
   });
 
   moteur.abonner((msg) => serveur.publish("ui", JSON.stringify(msg)));
+  moteur.abonner((msg) => {
+    const n = notificationPour(msg);
+    // console.error et non moteur.journaliser : le journal repasse par le bus, on bouclerait.
+    if (n) screenpipe.notifier(n).catch((e) => console.error(`notification screenpipe : ${e.message}`));
+  });
   return serveur;
 }
