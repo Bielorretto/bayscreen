@@ -543,9 +543,13 @@ async function valeursExtraites(pipe: string, regle: Regle, ex: Extraction[], li
  * ou règle différente de celle validée : elle ne part pas et sa règle s'arrête. Sinon elle reçoit en run_context son
  * déclencheur, les nombres listés par la règle validée et, si cette règle en extrait, les valeurs que Claude a lues dans le
  * texte de l'événement (jamais params.lire). Hors moteur, ou sans règle du pont active : l'exécuteur d'origine.
+ * params.lire est retiré de l'action avant tout await : params est l'objet même de l'action que garde le moteur, servie
+ * par GET /api/etat, /ws et la synchronisation. Seule sa diffusion à la création (moteur.ts, creerAction) le porte encore.
  */
 const lancerHorsPont = executeurs["pipe.lancer"]!;
 executeurs["pipe.lancer"] = async (params, bus) => {
+  const lire = params.lire;
+  delete params.lire;
   if (!(bus instanceof Moteur) || typeof params.pipe !== "string") return lancerHorsPont(params, bus);
   const pipe = params.pipe;
   const regle = bus.regles.find((r) => r.active && r.id === idReglePipe(pipe));
@@ -569,7 +573,7 @@ executeurs["pipe.lancer"] = async (params, bus) => {
     throw new Error(`${ecart} : non lancée`);
   }
   const ex = extractionDe(regle); // le spec de la règle validée, pas celui des paramètres remplis
-  const extraites = ex.length ? await valeursExtraites(pipe, regle, ex, params.lire, texte, bus) : {};
+  const extraites = ex.length ? await valeursExtraites(pipe, regle, ex, lire, texte, bus) : {};
   // Claude a pu prendre jusqu'à 30 s : une règle arrêtée ou remplacée entre-temps ne lance plus rien.
   if (ex.length && !bus.regles.includes(regle)) throw new Error("règle arrêtée ou modifiée pendant l'extraction : non lancée");
   return lancerPipe(pipe, { run_context: { source: "des-que", condition: texte, evenement: { ...nombresTransmis(regle, params.evenement), ...extraites } } });
