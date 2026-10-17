@@ -252,6 +252,14 @@
       </form>
     </section>
     <section style="margin-top:16px">
+      <h2>Écris ta règle en français</h2>
+      <form id="form-phrase">
+        <textarea id="phrase" rows="2" maxlength="500" placeholder="Dès qu'un mail parle de facture, préviens-moi"></textarea>
+        <button class="principal" type="submit">Traduire</button>
+      </form>
+      <div id="phrase-resultat" style="margin-top:8px"></div>
+    </section>
+    <section style="margin-top:16px">
       <h2>Créer une règle</h2>
       <form id="form-regle">
         <input id="r-nom" placeholder="Nom de la règle" required />
@@ -380,6 +388,43 @@ function recevoir(m) {
       break;
     }
   }
+}
+
+// « Écris ta règle en français » : Claude traduit, la page montre ce qu'il a compris et les essais rejoués ;
+// rien n'est créé avant le clic sur « Créer la règle ».
+const OPS = { egal: "vaut", contient: "contient", superieur: "dépasse", inferieur: "est sous" };
+let regleTraduite = null;
+function resumer(r) {
+  const si = (r.desQue.si ?? []).map((c) => `<b>${esc(c.champ)}</b> ${OPS[c.op] ?? esc(c.op)} <b>${esc(c.valeur)}</b>`).join(" et ");
+  const quoi = r.alors.mode === "fixe"
+    ? `<b>${esc(LIBELLES[r.alors.action] ?? r.alors.action)}</b> : « ${esc(r.alors.params.text ?? r.alors.params.content)} »`
+    : `Claude rédige un <b>${esc(LIBELLES[r.alors.actionsPermises[0]] ?? r.alors.actionsPermises[0])}</b> : ${esc(r.alors.consigne)}`;
+  return `dès que <b>${esc(r.desQue.source)}/${esc(r.desQue.type)}</b>${si ? `, si ${si}` : ""} → ${quoi}
+    <div class="doux">${r.validation === "auto" ? "part sans validation (notification à vous seul)" : "attend votre validation à chaque fois"}</div>`;
+}
+$("form-phrase").onsubmit = async (e) => {
+  e.preventDefault();
+  const phrase = $("phrase").value.trim();
+  if (!phrase) return;
+  regleTraduite = null;
+  $("phrase-resultat").innerHTML = '<p class="doux">Claude traduit…</p>';
+  const r = await fetch("/api/regles/traduire", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ phrase }) })
+    .then((x) => x.json()).catch((err) => ({ ok: false, motif: err.message }));
+  const essais = (r.essais ?? []).map((l) => `<div class="doux">${esc(l)}</div>`).join("");
+  if (!r.ok) { $("phrase-resultat").innerHTML = `<div class="item"><b>Pas de règle</b> — ${esc(r.motif ?? r.erreur)}${essais}</div>`; return; }
+  regleTraduite = r.regle;
+  $("phrase-resultat").innerHTML = `<div class="item"><b>${esc(r.regle.nom)}</b><div>${resumer(r.regle)}</div>
+    <details style="margin-top:4px"><summary class="doux">Essais rejoués par le moteur</summary>${essais}</details>
+    <div class="actions" style="margin-top:6px"><button class="ok" onclick="creerRegleTraduite()">Créer la règle</button>
+    <button class="ko" onclick="regleTraduite=null;$('phrase-resultat').innerHTML=''">Annuler</button></div></div>`;
+};
+async function creerRegleTraduite() {
+  if (!regleTraduite) return;
+  const r = await fetch("/api/regles", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(regleTraduite) });
+  if (!r.ok) return alert((await r.json()).erreur);
+  regleTraduite = null;
+  $("phrase-resultat").innerHTML = '<p class="doux">Règle créée : elle apparaît dans « Règles ».</p>';
+  $("phrase").value = "";
 }
 
 $("r-mode").onchange = () => {

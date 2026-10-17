@@ -7,6 +7,7 @@ import type { Copilote } from "./copilote";
 import type { Moteur } from "./moteur";
 import { screenpipe, texteBrut, type NotificationScreenpipe } from "./screenpipe";
 import * as pipesDesQue from "./pipes-des-que";
+import { MAX_PHRASE, traduireRegle } from "./regle-en-francais";
 import type { Evenement, MessageUI, Regle } from "./types";
 
 // L'appli screenpipe (webview Tauri) appelle le moteur depuis « Add trigger » : état des pipes, synchronisation,
@@ -143,6 +144,12 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
 
         if (pathname === "/api/regles" && req.method === "GET") return json(moteur.regles);
         if (pathname === "/api/regles" && req.method === "POST") return await poserRegle(moteur, (await req.json()) as Regle);
+        // « Écris ta règle en français » : traduit seulement ; la page pose la règle par POST /api/regles au clic.
+        if (pathname === "/api/regles/traduire" && req.method === "POST") {
+          const { phrase } = (await req.json()) as { phrase?: string };
+          if (!phrase?.trim() || phrase.length > MAX_PHRASE) return json({ erreur: `phrase vide ou de plus de ${MAX_PHRASE} caractères` }, 400);
+          return json(await traduireRegle(phrase.trim()));
+        }
 
         // Brique B : l'ouverture vers l'extérieur et les tâches répétées (produites par Dev 1).
         if (pathname === "/api/connections" && req.method === "GET") {
