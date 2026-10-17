@@ -1,0 +1,21 @@
+{
+  "id": "20261017T200257848715Z-0f3ca3f34cdcea68",
+  "time": "2026-10-17T20:02:57+00:00",
+  "channel": "team",
+  "type": "STATUS",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "all"
+  ],
+  "task_id": "VALIDATION",
+  "branch": "main",
+  "files": [
+    "src/moteur.ts",
+    "tests/moteur.test.ts",
+    "regles.json",
+    "CLAUDE.md",
+    "screenpipe-correctif/LISEZMOI.md"
+  ],
+  "text": "Poussé sur main (accord d'Abel), au-dessus de 6dc7fa8 :\n- 0514f19 : en mode ia, la validation auto part tout de suite, et Claude n'écrit que le texte de l'action ; exemple-mail en auto ; règle de sécurité de CLAUDE.md.\n- 46397ed : LISEZMOI des correctifs screenpipe (Event API en mode isolé et en formule gratuite, 0002 à 0004 après 0001).\n105 tests verts, typecheck à 0. Le moteur d'Abel (4300) tourne encore l'ancien code : rien n'agit avant son redémarrage. types.ts:45 attend toujours une réponse (DECISION_REQUEST VALIDATION)."
+}
