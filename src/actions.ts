@@ -216,6 +216,10 @@ export const executeurs: Record<string, Executeur> = {
   /** Lance un pipe screenpipe existant (POST /pipes/:id/run), sans contexte ; son exécution est suivie à part. */
   "pipe.lancer": async (params, bus) => {
     if (typeof params.pipe !== "string") throw new Error("paramètre « pipe » manquant");
+    // Contournement bug screenpipe : l'extension pi-subagents, que l'app réinstalle à
+    // chaque redémarrage, tue son agent au chargement. On la retire avant de lancer.
+    const { degagerExtensionIncompatible } = await import("./fixes/pi-subagents");
+    await degagerExtensionIncompatible((n, m) => bus.journaliser(n, m));
     return lancerPipe(params.pipe, undefined, bus);
   },
 

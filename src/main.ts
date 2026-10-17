@@ -39,6 +39,12 @@ if (await fichierSources.exists()) {
 // Source « application active » : l'appli/fenêtre à l'écran, pour les « dès que j'ouvre X ».
 if (config.screenpipeCle) surveillerApp(moteur);
 
+// Contournement bug screenpipe : retirer l'extension pi-subagents (incompatible avec son
+// agent embarqué) au démarrage, et avant chaque lancement de pipe (actions.ts).
+import("./fixes/pi-subagents").then(({ degagerExtensionIncompatible }) =>
+  degagerExtensionIncompatible((n, m) => moteur.journaliser(n, m)),
+);
+
 // Pont « dès que » : surveillance automatique des pipes screenpipe. L'utilisateur
 // crée sa pipe dans l'app avec un déclencheur « dès que » (trigger.custom) : elle est
 // traduite et vérifiée toute seule, puis branchée seulement quand il clique « Valider ».
