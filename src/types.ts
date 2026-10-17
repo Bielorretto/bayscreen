@@ -5,7 +5,7 @@
 export type Evenement = {
   id: string;
   source: "screenpipe" | "web" | "mail" | "webhook" | "appel";
-  /** ex. "meeting_ended", "valeur_changee", "mail_recu", "question_appel" */
+  /** ex. "meeting_ended" (screenpipe), "valeur_changee" (web), "mail_recu" (mail), "visio_terminee" (appel) */
   type: string;
   /** Date ISO 8601 */
   date: string;
@@ -15,7 +15,7 @@ export type Evenement = {
 };
 
 export type Condition = {
-  /** Chemin dans evenement.donnees, ex. "valeur" ou "expediteur.adresse" */
+  /** Chemin dans evenement.donnees, ex. "valeur" ou "app" */
   champ: string;
   op: "egal" | "contient" | "superieur" | "inferieur";
   valeur: string | number;
@@ -46,6 +46,18 @@ export type Regle = {
   validation: "auto" | "demander";
 };
 
+/** Brique B : une tâche répétée repérée dans la mémoire (Dev 1), affichée en carte par la page (Dev 2). */
+export type TacheRepetee = {
+  /** Nom donné par Claude */
+  nom: string;
+  /** Applis où la tâche a été vue (app_name de screenpipe) */
+  applis: string[];
+  /** Jamais vide : une tâche sans preuve est écartée avant d'arriver à la page. date en ISO 8601. */
+  preuves: { date: string; extrait: string }[];
+  /** Envoyée telle quelle à POST /api/regles par « Créer la règle » ; desQue vise un événement réellement émis. Écrite par Claude à partir de données non fiables : toujours à valider. */
+  regle: Regle & { validation: "demander" };
+};
+
 export type StatutAction = "proposee" | "validee" | "refusee" | "executee" | "echec";
 
 /** Une action à exécuter, proposée par une règle ou par Claude. */
@@ -70,6 +82,9 @@ export type LigneJournal = {
   message: string;
   details?: unknown;
 };
+
+/** Ligne définitive d'une transcription de visio (copilote → assistant). date : ISO 8601. */
+export type LigneTranscription = { date: string; qui: string; micro: boolean; texte: string };
 
 /** Messages envoyés par le serveur à la page, sur le WebSocket /ws. */
 export type MessageUI =

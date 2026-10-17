@@ -3,8 +3,7 @@
 
 import { config } from "./config";
 import { demanderJSON } from "./claude";
-import type { LigneTranscription } from "./copilote";
-import type { Bus } from "./types";
+import type { Bus, LigneTranscription } from "./types";
 
 /** Actions que l'assistant d'appel a le droit de proposer (toujours avec validation). */
 export const ACTIONS_COPILOTE = ["notifier", "slack.envoyer", "telegram.envoyer", "webhook"];

@@ -3,10 +3,8 @@
 // n'écoute que le micro de l'utilisateur (device_type "input"), et se réveille
 // sur une phrase d'appel. La réponse elle-même est produite par assistant.ts (Dev 2).
 
-import type { Bus } from "./types";
+import type { Bus, LigneTranscription } from "./types";
 import type { EvenementBrut } from "./screenpipe";
-
-export type LigneTranscription = { date: string; qui: string; micro: boolean; texte: string };
 
 /** minuscules, sans accents ni ponctuation */
 export function normaliser(s: string): string {
