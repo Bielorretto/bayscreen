@@ -87,6 +87,12 @@ test("causeLisible : première ligne utile, sur une ligne, 300 caractères au pl
   expect(causeLisible(cles)).toBe('Bearer [clé masquée] [clé masquée] [clé masquée] ANTHROPIC_API_KEY=[clé masquée] {"api_key":"[clé masquée]"} access_token: [clé masquée] password=[clé masquée]');
 });
 
+test("causeLisible : une première ligne démesurée (texte non fiable) se nettoie vite, seuls ses 1 000 premiers caractères sont lus", () => {
+  const debut = performance.now();
+  expect(causeLisible("a-".repeat(40_000))).toBe("a-".repeat(150));
+  expect(performance.now() - debut).toBeLessThan(500); // avec la borne : ~1 ms ; sans elle : ~4 s (mesuré)
+});
+
 test("causeLisible : les autres formes courantes de clé (valeurs fictives) sont masquées aussi ; une cause ordinaire reste lisible", () => {
   const cas: [string, string][] = [
     ["curl: (22) 401 Authorization: Basic dXRpbGlzYXRldXI6ZmljdGlm", "curl: (22) 401 Authorization: Basic [clé masquée]"],

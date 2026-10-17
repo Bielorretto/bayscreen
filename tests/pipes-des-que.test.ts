@@ -1091,6 +1091,25 @@ test("relance : /run sans execution_id (autre version de screenpipe, proxy) → 
   expect([...moteur.actions.values()].filter((a) => a.nom === "pipe.lancer").map((a) => a.statut)).toEqual(["executee", "executee"]);
 });
 
+test("relance : une réponse sans data est relue ; une erreur de relevé qui porte une clé arrive masquée au journal", async () => {
+  const moteur = new Moteur(join(dossier, "regles-relance-gardes.json"));
+  await brancher(moteur, "relance-gardes");
+  let n = 0;
+  executions.set("relance-gardes", () => (n++ === 0 ? {} : { data: { id: 24, status: "completed" } }));
+  await moteur.emettre(prixCasque());
+  await attendre(() => lignesSuivi(moteur, "relance-gardes").length === 1);
+  expect(lignesSuivi(moteur, "relance-gardes")).toEqual([["info", "pipe « relance-gardes » : exécution 24 terminée"]]);
+  executions.set("relance-gardes", () => {
+    throw new Error('screenpipe GET /pipes/relance-gardes/executions/24 → 502 {"error":"proxy : Bearer jeton-fictif-42 refusé"}');
+  });
+  await moteur.emettre(prixCasque());
+  await attendre(() => lignesSuivi(moteur, "relance-gardes").length === 2);
+  expect(lignesSuivi(moteur, "relance-gardes")[1]).toEqual([
+    "alerte",
+    'pipe « relance-gardes » : exécution 24 : suivi interrompu (screenpipe GET /pipes/relance-gardes/executions/24 → 502 {"error":"proxy : Bearer [clé masquée] refusé"})',
+  ]);
+});
+
 test("relance : le relevé s'arrête à la limite, et sur une erreur, attrapée ; aucune notification", async () => {
   const moteur = new Moteur(join(dossier, "regles-relance-limite.json"));
   await brancher(moteur, "relance-limite");
