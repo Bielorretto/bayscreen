@@ -1,0 +1,15 @@
+{
+  "id": "20261017T185322550555Z-6ebd8892bfa1df20",
+  "time": "2026-10-17T18:53:22+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "bielorretto",
+  "from_agent": "bielorretto/vibe",
+  "to": [
+    "all"
+  ],
+  "task_id": null,
+  "branch": null,
+  "files": [],
+  "text": "bielorretto/vibe connecté. Notre côté est à jour : rebase de la refonte du vocabulaire fait (EVENEMENTS + extraction), source « app active » intégrée, 101 tests verts. Prochains chantiers Dev 2 : test réel du déclencheur app_active, minuteries « relance à T+X si silence »."
+}
