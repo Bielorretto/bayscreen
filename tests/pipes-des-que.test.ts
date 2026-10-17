@@ -1161,3 +1161,62 @@ test("relance : un texte piégé dans stderr (clé, retours à la ligne, balises
   // Le journal (servi par GET /api/etat à toute requête locale) ne porte rien de stderr.
   expect(JSON.stringify(moteur.journal).includes("<script>")).toBe(false);
 });
+
+// ── Compatibilité : ce que ed1e505 a validé et écrit reste valable, octet pour octet. ──
+
+test("compatibilité : une pipe validée avant le lot 6 reste branchée ; sans source à créer, règle, paramètres et proposition sont ceux de ed1e505, octet pour octet", async () => {
+  // Validation et règle de la pipe du casque telles que ed1e505 les écrit (ecrireValidation, sauverRegles), relues au démarrage.
+  const DEMO = "dès que le casque passe sous 80 €";
+  const desQue = '{"source":"web","type":"valeur_changee","si":[{"champ":"nom","op":"egal","valeur":"Casque audio"},{"champ":"valeur","op":"inferieur","valeur":"80"}]}';
+  const alors = '{"mode":"fixe","action":"pipe.lancer","params":{"pipe":"casque-demo","evenement":{"valeur":"{{valeur}}","ancienne":"{{ancienne}}"}}}';
+  const regleDemo = `{"id":"pipe-des-que-casque-demo","nom":"Alerte casque — dès que (pipe screenpipe)","active":true,"desQue":${desQue},"alors":${alors},"validation":"auto"}`;
+  const fichier = join(dossier, "regles-compat.json");
+  await Bun.write(fichier, `[${regleDemo}]`);
+  await valider({ "casque-demo": JSON.parse(`{"texte":${JSON.stringify(DEMO)},"desQue":${desQue},"alors":${alors}}`) });
+  const moteur = new Moteur(fichier);
+  await moteur.charger();
+  pipes = [{ config: { name: "casque-demo", title: "Alerte casque", enabled: true, trigger: { custom: DEMO } } }];
+  const avant = appelsClaude;
+  expect((await synchroniserAutomatiquement(moteur)).map((r) => [r.pipe, r.statut])).toEqual([["casque-demo", "deja"]]);
+  expect(appelsClaude).toBe(avant);
+  expect(JSON.stringify(moteur.regles)).toBe(`[${regleDemo}]`);
+  expect(JSON.stringify((await etatPipes(moteur))["casque-demo"])).toBe(
+    `{"declencheur":"${DEMO}","statut":"branchee","regle":"dès que web/valeur_changee si nom egal Casque audio et valeur inferieur 80 → lancer la pipe, en envoyant à son modèle le déclencheur et les nombres valeur, ancienne de l'événement"}`,
+  );
+  envois.length = 0;
+  await moteur.emettre(prixCasque());
+  expect(envois).toEqual([{ chemin: "/pipes/casque-demo/run", corps: `{"run_context":{"source":"des-que","condition":"${DEMO}","evenement":{"valeur":75,"ancienne":129},"consigne":"${CONSIGNE}"}}` }]);
+
+  // Nouvelle pipe, sans source à créer : proposition, état, règle armée et validation écrite, mot pour mot ceux de ed1e505.
+  traduction = traductionOk();
+  pipes = [pipeCasque("compat-neuve")];
+  await synchroniserAutomatiquement(moteur);
+  const a = proposee(moteur, "compat-neuve")!;
+  const resume = "dès que web/valeur_changee si nom egal Casque audio et valeur inferieur 90 et ancienne superieur 90 → lancer la pipe, en envoyant à son modèle le déclencheur et les nombres valeur, ancienne de l'événement";
+  const si90 = '[{"champ":"nom","op":"egal","valeur":"Casque audio"},{"champ":"valeur","op":"inferieur","valeur":"90"},{"champ":"ancienne","op":"superieur","valeur":"90"}]';
+  const alors90 = '{"mode":"fixe","action":"pipe.lancer","params":{"pipe":"compat-neuve","evenement":{"valeur":"{{valeur}}","ancienne":"{{ancienne}}"}}}';
+  const regle90 = (active: boolean) => `{"id":"pipe-des-que-compat-neuve","nom":"compat-neuve — dès que (pipe screenpipe)","active":${active},"desQue":{"source":"web","type":"valeur_changee","si":${si90}},"alors":${alors90},"validation":"auto"}`;
+  expect(JSON.stringify(a.params)).toBe(`{"text":"Brancher la pipe « compat-neuve » : ${resume}","pipe":"compat-neuve","declencheur":"${TEXTE}","empreinteConsigne":"e3b0c44298fc1c14","regle":${regle90(false)}}`);
+  const essais = [
+    'OK déclenche : {"nom":"Casque audio","valeur":85,"ancienne":"95"} (passe sous 90)',
+    'OK ne déclenche pas : {"nom":"Casque audio","valeur":95,"ancienne":"99"} (reste au-dessus)',
+  ];
+  expect(a.preuve).toBe(
+    [
+      `Déclencheur écrit dans screenpipe : « ${TEXTE} »`,
+      "Accès : champs de l'événement OK (tous présents) ; source web OK (« Casque audio » surveillée) ; pipe screenpipe OK (active)",
+      `Essais rejoués par le moteur :\n${essais.join("\n")}`,
+      "Envoyé au modèle de la pipe à chaque lancement : le déclencheur et les nombres valeur, ancienne de l'événement. Jamais le texte d'un mail, d'une page ou d'une transcription.",
+    ].join("\n"),
+  );
+  const acces = '[{"acces":"champs de l\'événement","ok":true,"detail":"tous présents"},{"acces":"source web","ok":true,"detail":"« Casque audio » surveillée"},{"acces":"pipe screenpipe","ok":true,"detail":"active"}]';
+  expect(JSON.stringify({ ...(await etatPipes(moteur))["compat-neuve"], actionId: undefined })).toBe(
+    `{"declencheur":"${TEXTE}","statut":"a_valider","regle":"${resume}","acces":${acces},"essais":${JSON.stringify(essais)}}`,
+  );
+  await moteur.valider(a.id);
+  expect(JSON.stringify(moteur.regles.find((r) => r.id === idReglePipe("compat-neuve")))).toBe(regle90(true));
+  expect(JSON.stringify((await Bun.file(process.env.FICHIER_PIPES_DES_QUE!).json())["compat-neuve"])).toBe(
+    `{"texte":"${TEXTE}","desQue":{"source":"web","type":"valeur_changee","si":${si90}},"alors":${alors90}}`,
+  );
+  expect(JSON.stringify((await etatPipes(moteur))["compat-neuve"])).toBe(`{"declencheur":"${TEXTE}","statut":"branchee","regle":"${resume}"}`);
+});
