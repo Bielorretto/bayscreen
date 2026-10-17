@@ -20,13 +20,37 @@ function texte(params: Record<string, unknown>, cle = "text"): string {
   return v;
 }
 
+/** Une page web et rien d'autre : http ou https (ni file:, ni javascript:, ni option de commande). */
+function urlWeb(v: unknown): URL | null {
+  try {
+    const url = new URL(String(v));
+    return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 export const executeurs: Record<string, Executeur> = {
-  /** Toujours disponible : notification dans l'appli screenpipe (et dans le journal). */
+  /**
+   * Toujours disponible : notification dans l'appli screenpipe (et dans le journal).
+   * Bouton facultatif : params.lien (page http ou https) et params.libelle. Le type « link » est ouvert
+   * par screenpipe lui-même : c'est le seul bouton fiable dans son panneau natif.
+   */
   notifier: async (params, bus) => {
     const message = texte(params);
     bus.journaliser("alerte", `Notification : ${message}`);
-    await screenpipe.notifier({ pipe_name: "des-que", title: "Dès que", body: texteBrut(message), autoDismissMs: 0 });
-    return { affiche: true };
+    const demande = params.lien != null && String(params.lien).trim() !== "";
+    const lien = demande ? urlWeb(params.lien) : null;
+    // Un lien invalide n'empêche pas l'information de passer : la notification part sans bouton.
+    if (demande && !lien) bus.journaliser("alerte", "notification : lien ignoré (page http ou https attendue)");
+    await screenpipe.notifier({
+      pipe_name: "des-que",
+      title: "Dès que",
+      body: texteBrut(message),
+      autoDismissMs: 0,
+      ...(lien && { actions: [{ id: "ouvrir", label: String(params.libelle ?? "").replace(/\s+/g, " ").trim().slice(0, 40) || "Ouvrir", type: "link" as const, url: lien.href }] }),
+    });
+    return { affiche: true, ...(lien && { lien: lien.href }) };
   },
 
   /** Message Discord par le webhook rangé dans screenpipe ; sert quand on valide depuis la page ou l'API. */
@@ -58,13 +82,8 @@ export const executeurs: Record<string, Executeur> = {
 
   /** Ouvre une page dans le navigateur par défaut. http ou https seulement : jamais file:, javascript: ni une option de `open`. */
   ouvrir: async (params) => {
-    let url: URL;
-    try {
-      url = new URL(String(params.url));
-    } catch {
-      throw new Error("paramètre « url » invalide");
-    }
-    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("paramètre « url » : http ou https seulement");
+    const url = urlWeb(params.url);
+    if (!url) throw new Error("paramètre « url » : page http ou https attendue");
     // Environnement minimal : un navigateur lancé par open hériterait sinon des clés du .env.
     const env = Object.fromEntries(
       ["PATH", "HOME", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"].flatMap((k) => (process.env[k] ? [[k, process.env[k]!]] : [])),

@@ -28,7 +28,9 @@
       "mode": "fixe",
       "action": "notifier",
       "params": {
-        "text": "{{nom}} : {{valeurTexte}} € (avant : {{ancienne}} €)"
+        "text": "{{nom}} : {{valeurTexte}} € (avant : {{ancienne}} €)",
+        "lien": "http://127.0.0.1:4310/",
+        "libelle": "Voir le prix"
       }
     },
     "validation": "auto"
@@ -131,7 +133,9 @@
       "mode": "fixe",
       "action": "notifier",
       "params": {
-        "text": "L’ISS passe au-dessus de Paris : elle est à {{valeurTexte}} km du centre, à plus de 400 km d’altitude"
+        "text": "L’ISS passe au-dessus de Paris : elle est à {{valeurTexte}} km du centre, à plus de 400 km d’altitude",
+        "lien": "http://127.0.0.1:4310/iss?lat=48.8566&lon=2.3522&nom=Paris",
+        "libelle": "Voir le direct NASA"
       }
     },
     "validation": "auto"
