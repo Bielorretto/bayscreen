@@ -72,7 +72,9 @@ export const screenpipe = {
   mail: (id: number, mailbox: string) =>
     sp<{ body?: string }>(`/connections/imap/messages/${id}?${new URLSearchParams({ mailbox })}`),
 
-  lancerPipe: (id: string) => sp(`/pipes/${encodeURIComponent(id)}/run`, { method: "POST", body: "{}" }),
+  /** Corps facultatif : run_context, ajouté à la consigne de ce seul passage (bloc « RUN CONTEXT », pipes_api.rs, format_run_context). */
+  lancerPipe: (id: string, corps: { run_context?: Record<string, unknown> } = {}) =>
+    sp(`/pipes/${encodeURIComponent(id)}/run`, { method: "POST", body: JSON.stringify(corps) }),
 
   /** Notification dans l'appli screenpipe : sidecar Tauri, port 11435, sans clé (vérifié : 200). Jusqu'à 5 boutons. */
   notifier: async (n: NotificationScreenpipe) => {

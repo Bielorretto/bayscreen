@@ -34,8 +34,12 @@ export function regleCorrespond(r: Regle, evt: Evenement): boolean {
   return (r.desQue.si ?? []).every((c) => conditionVraie(c, evt.donnees));
 }
 
-/** Remplace {{champ}} par evenement.donnees.champ dans toutes les chaînes des paramètres. */
+/**
+ * Remplace {{champ}} par evenement.donnees.champ dans toutes les chaînes des paramètres.
+ * Une valeur qui vaut exactement "{{*}}" devient une copie des données entières (un objet, pas une chaîne).
+ */
 export function remplir(params: unknown, donnees: Record<string, unknown>): any {
+  if (params === "{{*}}") return structuredClone(donnees);
   if (typeof params === "string") return params.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, c) => String(lireChamp(donnees, c) ?? ""));
   if (Array.isArray(params)) return params.map((p) => remplir(p, donnees));
   if (params && typeof params === "object") return Object.fromEntries(Object.entries(params).map(([k, v]) => [k, remplir(v, donnees)]));

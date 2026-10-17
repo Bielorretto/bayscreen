@@ -27,6 +27,20 @@ export function origineAcceptee(req: Request, port = config.port): boolean {
   return !origine || permis.has(origine.replace(/^http:\/\//, ""));
 }
 
+/**
+ * Valider / Refuser une action. Depuis l'appli screenpipe (son origine), seulement le branchement d'une pipe qui existe
+ * (« pipe.brancher ») : c'est tout ce dont « Add trigger » a besoin, et un script lancé dans sa webview ne peut pas
+ * faire partir un message ou un webhook en attente. Les autres origines (page du moteur, curl du chat) : inchangé.
+ */
+export async function validerOuRefuser(req: Request, moteur: Pick<Moteur, "actions" | "valider" | "refuser">, id: string, verbe: string): Promise<Response> {
+  if (req.headers.get("origin") === ORIGINE_SCREENPIPE && moteur.actions.get(id)?.nom !== "pipe.brancher") {
+    return json({ erreur: "depuis l'appli screenpipe, seul le branchement d'une pipe se valide ou se refuse" }, 403);
+  }
+  if (verbe === "valider") await moteur.valider(id);
+  else moteur.refuser(id);
+  return json({ ok: true });
+}
+
 /** Ce que l'appli screenpipe affiche pour un message du moteur ; null : rien. */
 /** Deeplink screenpipe://chat/new (préremplit le chat, n'envoie jamais rien seul) : demande à l'agent du chat de valider ou refuser l'action. */
 export function demandeChat(a: { id: string; nom: string; params: Record<string, unknown> }, geste: "valider" | "refuser"): string {
@@ -99,12 +113,8 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
         }
 
         const m = pathname.match(/^\/api\/actions\/([\w-]+)\/(valider|refuser)$/);
-        if (m && req.method === "POST") {
-          const [, id, verbe] = m;
-          if (verbe === "valider") await moteur.valider(id!);
-          else moteur.refuser(id!);
-          return json({ ok: true });
-        }
+        // await : une erreur de validation reste une réponse 400 du catch ci-dessous.
+        if (m && req.method === "POST") return await validerOuRefuser(req, moteur, m[1]!, m[2]!);
 
         if (pathname === "/api/regles" && req.method === "GET") return json(moteur.regles);
         if (pathname === "/api/regles" && req.method === "POST") {

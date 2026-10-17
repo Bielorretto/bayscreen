@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { config } from "../src/config";
-import { notificationPour, origineAcceptee } from "../src/serveur";
+import { notificationPour, origineAcceptee, validerOuRefuser } from "../src/serveur";
 import type { Action } from "../src/types";
 
 const req = (headers: Record<string, string>) =>
@@ -44,4 +44,31 @@ test("notificationPour : une proposition reste affichée et mène à la page, o�
   expect(n.body).toContain("Pourquoi");
   expect(notificationPour({ type: "action", action: action({ statut: "executee" }) })).toBeNull();
   expect(notificationPour({ type: "journal", ligne: { date: "", niveau: "info", message: "x" } })).toBeNull();
+});
+
+test("validerOuRefuser : depuis l'appli screenpipe, seulement le branchement d'une pipe qui existe", async () => {
+  // Faux moteur : rien n'est exécuté, on note seulement les gestes qui passent.
+  const gestes: string[] = [];
+  const moteur = {
+    actions: new Map([
+      ["a-pipe", action({ id: "a-pipe", nom: "pipe.brancher" })],
+      ["a-discord", action({ id: "a-discord" })],
+    ]),
+    valider: async (id: string) => void gestes.push(`valider ${id}`),
+    refuser: (id: string) => void gestes.push(`refuser ${id}`),
+  };
+  const geste = (id: string, verbe: string, origin?: string) =>
+    validerOuRefuser(new Request(`http://127.0.0.1:4300/api/actions/${id}/${verbe}`, { method: "POST", headers: origin ? { origin } : {} }), moteur, id, verbe);
+  for (const [id, verbe] of [["a-discord", "valider"], ["a-discord", "refuser"], ["inconnue", "valider"], ["inconnue", "refuser"]]) {
+    const r = await geste(id!, verbe!, "tauri://localhost");
+    expect(r.status).toBe(403);
+    expect(await r.json()).toHaveProperty("erreur");
+  }
+  expect(gestes).toEqual([]);
+  expect((await geste("a-pipe", "valider", "tauri://localhost")).status).toBe(200);
+  expect((await geste("a-pipe", "refuser", "tauri://localhost")).status).toBe(200);
+  // Autres origines inchangées : curl du chat screenpipe (sans origine), page du moteur.
+  expect((await geste("a-discord", "valider")).status).toBe(200);
+  expect((await geste("a-discord", "refuser", "http://127.0.0.1:4300")).status).toBe(200);
+  expect(gestes).toEqual(["valider a-pipe", "refuser a-pipe", "valider a-discord", "refuser a-discord"]);
 });

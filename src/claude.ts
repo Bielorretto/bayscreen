@@ -21,17 +21,33 @@ export async function demanderJSON<T>(o: {
   modele?: string;
   effort?: Effort;
   maxTokens?: number;
+  /** Délai total en ms, nouvelles tentatives et lecture de la réponse comprises. Sans lui : réglages du SDK (10 min par essai). */
+  delaiMs?: number;
+  /** Nouvelles tentatives après une erreur passagère. Sans lui : 2 (SDK). */
+  nouvellesTentatives?: number;
 }): Promise<T> {
-  const rep = await client.messages.create({
-    model: o.modele ?? config.modeleStandard,
-    max_tokens: o.maxTokens ?? 2048,
-    system: `${o.systeme}\n\n${GARDE_FOU}`,
-    messages: [{ role: "user", content: o.contenu }],
-    output_config: {
-      format: { type: "json_schema", schema: o.schema },
-      ...(o.effort ? { effort: o.effort } : {}),
-    },
-  });
+  // timeout (SDK) ne vaut que par essai, jusqu'aux en-têtes : c'est le signal qui borne le tout.
+  const signal = o.delaiMs ? AbortSignal.timeout(o.delaiMs) : undefined;
+  const rep = await client.messages
+    .create(
+      {
+        model: o.modele ?? config.modeleStandard,
+        max_tokens: o.maxTokens ?? 2048,
+        system: `${o.systeme}\n\n${GARDE_FOU}`,
+        messages: [{ role: "user", content: o.contenu }],
+        output_config: {
+          format: { type: "json_schema", schema: o.schema },
+          ...(o.effort ? { effort: o.effort } : {}),
+        },
+      },
+      {
+        ...(signal && { signal, timeout: o.delaiMs }),
+        ...(o.nouvellesTentatives !== undefined && { maxRetries: o.nouvellesTentatives }),
+      },
+    )
+    .catch((e) => {
+      throw signal?.aborted ? new Error(`Claude n'a pas répondu dans les ${o.delaiMs! / 1000} s`) : e;
+    });
   if (rep.stop_reason !== "end_turn") {
     throw new Error(`Claude s'est arrêté sur « ${rep.stop_reason} » : réponse inutilisable`);
   }

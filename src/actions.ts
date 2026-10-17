@@ -6,6 +6,14 @@ import type { Bus } from "./types";
 
 export type Executeur = (params: Record<string, unknown>, bus: Bus) => Promise<unknown>;
 
+/** POST /pipes/:id/run ; corps : { run_context } facultatif (sinon « {} »). Sert aussi au pont « dès que » (pipes-des-que.ts). */
+export async function lancerPipe(pipe: string, corps?: { run_context?: Record<string, unknown> }) {
+  const r = (await screenpipe.lancerPipe(pipe, corps)) as Record<string, unknown> | null;
+  // screenpipe répond 200 même quand le pipe échoue : l'erreur est dans le corps.
+  if (r && typeof r === "object" && "error" in r) throw new Error(String(r.error).slice(0, 300));
+  return r;
+}
+
 function texte(params: Record<string, unknown>, cle = "text"): string {
   const v = params[cle] ?? params.texte ?? params.message;
   if (typeof v !== "string" || !v.trim()) throw new Error(`paramètre « ${cle} » manquant`);
@@ -66,13 +74,10 @@ export const executeurs: Record<string, Executeur> = {
     return { ouverte: url.href };
   },
 
-  /** Lance un pipe screenpipe existant (POST /pipes/:id/run). */
+  /** Lance un pipe screenpipe existant (POST /pipes/:id/run), sans contexte. */
   "pipe.lancer": async (params) => {
     if (typeof params.pipe !== "string") throw new Error("paramètre « pipe » manquant");
-    const r = (await screenpipe.lancerPipe(params.pipe)) as Record<string, unknown> | null;
-    // screenpipe répond 200 même quand le pipe échoue : l'erreur est dans le corps.
-    if (r && typeof r === "object" && "error" in r) throw new Error(String(r.error).slice(0, 300));
-    return r;
+    return lancerPipe(params.pipe);
   },
 
   // TODO Dev 2 : "mail.repondre", "notion.creer", "linear.creer" via /connections/:id/proxy/...
