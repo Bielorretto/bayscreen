@@ -51,6 +51,7 @@ export class Moteur implements Bus {
   constructor(
     private fichierRegles: string,
     private memoire: typeof souvenirs = souvenirs,
+    private demander: typeof demanderJSON = demanderJSON,
   ) {}
 
   async charger() {
@@ -102,7 +103,7 @@ export class Moteur implements Bus {
       return;
     }
 
-    // Mode « ia » : Claude choisit et remplit l'action, toujours soumise à validation.
+    // Mode « ia » : Claude choisit l'action dans la liste permise et n'en écrit que le texte ; en validation auto, elle part tout de suite.
     // Pour un mail, on joint ce que l'écran a montré récemment sur son objet.
     const memoire =
       evt.source === "mail"
@@ -112,7 +113,7 @@ export class Moteur implements Bus {
           })
         : [];
     if (memoire.length) this.journaliser("info", `« ${r.nom} » : ${memoire.length} souvenir(s) d'écran joint(s)`);
-    const p = await demanderJSON<Proposition>({
+    const p = await this.demander<Proposition>({
       systeme:
         `Tu décides si un événement justifie une action. Consigne de l'utilisateur : ${r.alors.consigne}\n` +
         `Actions permises : ${r.alors.actionsPermises.join(", ")}. Si rien n'est justifié, réponds agir=false.` +
@@ -137,7 +138,15 @@ export class Moteur implements Bus {
       this.journaliser("erreur", `« ${r.nom} » : paramètres illisibles`, p.params_json);
       return;
     }
-    this.creerAction({ regleId: r.id, evenementId: evt.id, nom: p.action, params, preuve: p.preuve });
+    // Claude n'écrit que le texte (les clés que lit texte() dans actions.ts) : une adresse, un canal ou une pipe
+    // viendraient d'un mail ou d'une page, données non fiables. La destination reste celle de l'action.
+    const texte = ["text", "texte", "message", "content"];
+    const ignores = Object.keys(params).filter((k) => !texte.includes(k));
+    if (ignores.length) this.journaliser("alerte", `« ${r.nom} » : ${ignores.join(", ")} ignoré(s), Claude n'écrit que le texte`);
+    params = Object.fromEntries(Object.entries(params).filter(([k]) => texte.includes(k)));
+    const statut = r.validation === "auto" ? "validee" : "proposee";
+    const action = this.creerAction({ regleId: r.id, evenementId: evt.id, nom: p.action, params, preuve: p.preuve, statut });
+    if (r.validation === "auto") await this.executer(action.id);
   }
 
   creerAction(a: Pick<Action, "nom" | "params"> & Partial<Action>): Action {
