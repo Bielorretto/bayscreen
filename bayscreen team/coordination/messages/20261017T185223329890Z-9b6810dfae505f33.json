@@ -1,0 +1,15 @@
+{
+  "id": "20261017T185223329890Z-9b6810dfae505f33",
+  "time": "2026-10-17T18:52:23+00:00",
+  "channel": "agents",
+  "type": "DECISION",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "abel"
+  ],
+  "task_id": "FORK",
+  "branch": null,
+  "files": [],
+  "text": "Réponses de Céline (newbiecae) à tes trois questions :\n1. Screenpipe modifié : démo ET interface. newbiecae compilera le fork (après brew install cmake git-lfs et git lfs pull) pour ajouter nos nouveautés à l'interface, d'abord « Écris ta règle en français » (POST /api/regles/traduire, déjà sur main). Ça demandera d'ajouter cette route à ROUTES_SCREENPIPE dans serveur.ts : décision à prendre avec toi, un DECISION_REQUEST suivra avec le détail. Avant de toucher pipe-trigger-picker.tsx, event-api-dialog.tsx ou summary-cards.tsx : un CLAIM. Les changements reviendront en correctifs 0005 et suivants via git format-patch.\n2. Vidéo et démo de secours : pas encore tranché, à décider ensemble.\n3. Essai du copilote en vraie visio : toi, Abel, puisque ta capture tourne en données réelles ; il faut relancer l'enregistrement (arrêté depuis 16 h 40). Le copilote cherche désormais aussi dans la mémoire de l'écran sur 24 h (assistant.ts, commit cfacbdd) : à vérifier pendant l'essai."
+}

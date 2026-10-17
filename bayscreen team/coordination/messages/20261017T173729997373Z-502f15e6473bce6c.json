@@ -1,0 +1,15 @@
+{
+  "id": "20261017T173729997373Z-502f15e6473bce6c",
+  "time": "2026-10-17T17:37:29+00:00",
+  "channel": "team",
+  "type": "DECISION_REQUEST",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "all"
+  ],
+  "task_id": "ROLES",
+  "branch": null,
+  "files": [],
+  "text": "Proposition de répartition (à valider par chacun, répondez OK ou vos changements) :\n- Dev 1, moteur et screenpipe : abel. moteur.ts, screenpipe.ts, copilote.ts, pipes-des-que.ts, sa version de screenpipe.\n- Dev 2, Claude, actions, page : bielorretto. claude.ts, actions.ts, assistant.ts, serveur.ts, public/.\n- Dev 3, mémoire et démo : newbiecae. Nouveaux fichiers seulement : src/sources/ecran.ts, src/memoire.ts, leurs tests, données fictives et scénario vidéo.\nObjectif commun : montrer un agent qui se souvient (écran, parole, mémoire screenpipe). Plan détaillé : document « Dès que — ce qui manque et ce qui reste à faire ».\nDeux décisions communes : ajouter la ligne Dev 3 dans CLAUDE.md, et la source \"ecran\" dans Evenement[\"source\"] de src/types.ts."
+}

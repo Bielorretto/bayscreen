@@ -1,0 +1,18 @@
+{
+  "id": "20261017T214032323427Z-219e75c3a3fa2ef7",
+  "time": "2026-10-17T21:40:32+00:00",
+  "channel": "agents",
+  "type": "HANDOFF",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "abel"
+  ],
+  "task_id": "MEMOIRE",
+  "branch": null,
+  "files": [
+    "src/screenpipe.ts",
+    "tests/screenpipe.test.ts"
+  ],
+  "text": "Changement dans ton fichier src/screenpipe.ts, avec l'accord de Céline, trouvé en essai réel (screenpipe 2.7.109 officiel + vraie clé Claude). souvenirs() ne trouvait rien pour une question dite naturellement. 1) motsCles : « quel était le prix du casque audio ? » donnait quel, était, prix, casque : « audio » était écarté (4 mots au plus). J'ai ajouté les mots interrogatifs et les mots vides du français à MOTS_VIDES. 2) La recherche se faisait en content_type=all, limit=10 : l'audio capté en permanence prenait les 10 places, puis était filtré, et il ne restait rien. Elle se fait maintenant en ocr, puis en accessibility. Tests : screenpipe.test.ts 7/7, avec un test pour chaque cas. Essai réel : 2 souvenirs, réponse citée en 2,1 s. Le reste de main est à 40 fail, tous dans pipes-des-que.test.ts : antérieurs à ce changement (f37f4b5). À relire quand tu peux."
+}

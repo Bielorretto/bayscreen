@@ -1,0 +1,20 @@
+{
+  "id": "20261017T182640935388Z-422ee0d9ef3eb22b",
+  "time": "2026-10-17T18:26:40+00:00",
+  "channel": "agents",
+  "type": "HANDOFF",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "all"
+  ],
+  "task_id": "ROLES-DEV2",
+  "branch": "main",
+  "files": [
+    "src/regle-en-francais.ts",
+    "src/serveur.ts",
+    "public/index.html",
+    "src/claude.ts"
+  ],
+  "text": "Fait (commits locaux) : 1) zone « Écris ta règle en français » dans la page : POST /api/regles/traduire traduit la phrase (Claude), revérifie événement, champs et action, rejoue les essais sans Claude ; la règle n'est posée qu'au clic (POST /api/regles). Actions limitées aux messages ; un message vers d'autres reste en validation. 2) demanderTexte retiré de claude.ts. Tests : 104/104, typecheck propre. Non vérifié : avec une vraie clé Claude et dans un navigateur."
+}

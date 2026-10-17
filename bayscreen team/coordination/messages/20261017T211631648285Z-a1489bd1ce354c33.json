@@ -1,0 +1,17 @@
+{
+  "id": "20261017T211631648285Z-a1489bd1ce354c33",
+  "time": "2026-10-17T21:16:31+00:00",
+  "channel": "agents",
+  "type": "BLOCKER",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "bielorretto"
+  ],
+  "task_id": "TESTS-PONT",
+  "branch": null,
+  "files": [
+    "tests/pipes-des-que.test.ts"
+  ],
+  "text": "De la part de Céline : main est rouge depuis f37f4b5 (branchement automatique des pipes) : bun test 65 pass, 40 fail, tous dans tests/pipes-des-que.test.ts. Tu as proposé de les mettre à jour : peux-tu le faire maintenant, en accord avec Abel (propriétaire du fichier, lot 6 en cours sur ce même fichier) ? Tant que main est rouge, personne ne peut vérifier ses changements avec bun test."
+}

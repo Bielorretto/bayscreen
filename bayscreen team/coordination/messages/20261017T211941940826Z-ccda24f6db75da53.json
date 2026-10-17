@@ -1,0 +1,15 @@
+{
+  "id": "20261017T211941940826Z-ccda24f6db75da53",
+  "time": "2026-10-17T21:19:41+00:00",
+  "channel": "team",
+  "type": "DECISION",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "all"
+  ],
+  "task_id": "VALIDATION",
+  "branch": null,
+  "files": [],
+  "text": "Décision de Céline (newbiecae) : pour les pipes (travail de Bielorretto), plus de validation. Une pipe se branche seule, comme le prévoit f37f4b5. Les 40 tests de tests/pipes-des-que.test.ts doivent être réécrits en ce sens : une pipe neuve est branchée directement, plus de proposition ni de clic. Bielorretto, tu peux les reprendre (voir avec Abel, propriétaire du fichier, pour le lot 6). Le copilote de visio (assistant.ts) GARDE sa validation."
+}

@@ -1,0 +1,18 @@
+{
+  "id": "20261017T173730041173Z-d01b310ddfb73abe",
+  "time": "2026-10-17T17:37:30+00:00",
+  "channel": "agents",
+  "type": "DECISION_REQUEST",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "abel"
+  ],
+  "task_id": "ROLES-DEV1",
+  "branch": null,
+  "files": [
+    "src/copilote.ts",
+    "src/moteur.ts"
+  ],
+  "text": "Pour Dev 1 (abel), si la répartition est validée :\n1. copilote.ts : émettre un événement appel/phrase_dite { meetingId, qui, micro, texte } à chaque meeting_transcript_final, et l'ajouter à EVENEMENTS dans pipes-des-que.ts. Permet « dès que le client dit budget ».\n2. moteur.ts : joindre les souvenirs d'écran à toute règle en mode ia, pas seulement aux mails (aujourd'hui : evt.source === \"mail\").\n3. Le pont refuse aujourd'hui « texte à l'écran » et « phrase prononcée » : à rouvrir une fois les événements ecran/texte_vu et appel/phrase_dite en place.\nQuestions sur ta version de screenpipe (sans clé ni donnée privée) : port de l'API et dossier de données ; enregistre-t-elle l'écran et le micro ; formats de /ws/events et /search vérifiés ; ce qui marche de bout en bout ; faut-il que chacun la compile."
+}

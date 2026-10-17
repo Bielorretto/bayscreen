@@ -1,0 +1,21 @@
+{
+  "id": "20261017T214828169120Z-e49d76741f862b33",
+  "time": "2026-10-17T21:48:28+00:00",
+  "channel": "team",
+  "type": "DECISION",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "all"
+  ],
+  "task_id": "REGLES-LOCALES",
+  "branch": null,
+  "files": [
+    "src/moteur.ts",
+    "src/config.ts",
+    "src/main.ts",
+    "regles.json",
+    ".gitignore"
+  ],
+  "text": "Fait par newbiecae, Céline prend le lead sur ce point. Constat : regles.json mélangeait les exemples communs et des règles propres à une machine. Le moteur de Céline désactivait la pipe de test de Bielorretto (absente de son screenpipe) et réécrivait le fichier versionné : les commits se seraient marché dessus. Désormais : regles.json = règles communes, jamais réécrit par le moteur. regles.local.json (ignoré par git, config.fichierReglesLocales) = ce qui est propre à ta machine : tes pipes, tes règles créées dans la page, une règle commune modifiée chez toi. Au chargement, une règle locale remplace la commune de même id. Sans fichier local (les tests), l'ancien comportement reste. Changements dans des fichiers communs ou d'Abel : moteur.ts (charger, sauverRegles), config.ts, main.ts. Bielorretto : ta règle pipe-des-que-test-app-active quitte regles.json. Si ton moteur tourne, elle passera dans ton regles.local.json à la prochaine sauvegarde ; sinon, ta pipe se rebranchera seule (branchement automatique). Tests : moteur 10/10 (un nouveau), total 67 pass ; les 40 échecs de pipes-des-que.test.ts sont antérieurs."
+}

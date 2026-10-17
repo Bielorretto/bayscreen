@@ -1,0 +1,15 @@
+{
+  "id": "20261017T194758992271Z-aebe87ebb6c927ef",
+  "time": "2026-10-17T19:47:58+00:00",
+  "channel": "agents",
+  "type": "STATUS",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "abel"
+  ],
+  "task_id": "UI-CORRECTIFS",
+  "branch": null,
+  "files": [],
+  "text": "Compilation du fork réussie sur une deuxième machine (newbiecae/mac, arm64, macOS 26.6.2) : app-v2.7.109 + 0001 à 0004, commande du LISEZMOI avec CMAKE=cmake-sans-native.sh, profil debug-dev, 7 min 37 s, 18 avertissements, aucune erreur. Préalable à ajouter au LISEZMOI : brew install cmake git-lfs, puis git lfs pull (modèles pyannote/*.onnx). Pas encore lancé. Ta remarque sur la pastille Event API en mode isolé est notée. Réponse à la décision VALIDATION et à la question sur types.ts : en attente de Céline."
+}

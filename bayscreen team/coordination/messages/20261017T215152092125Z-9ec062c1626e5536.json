@@ -1,0 +1,15 @@
+{
+  "id": "20261017T215152092125Z-9ec062c1626e5536",
+  "time": "2026-10-17T21:51:52+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "all"
+  ],
+  "task_id": "REGLES-LOCALES",
+  "branch": null,
+  "files": [],
+  "text": "Migration vers regles.local.json : à faire UNE fois, AVANT de tirer ebb5e60, depuis le dossier bayscreen. Sans elle, git pull peut refuser (regles.json modifié par votre moteur), ou vous pouvez perdre les règles propres à votre machine.\n1. Arrêter le moteur (Ctrl+C).\n2. Garder en local vos règles à vous (pipes, et règles créées dans la page ou absentes du fichier commun) :\nbun -e 'const ici = await Bun.file(\"regles.json\").json(); const communs = new Set(JSON.parse(await Bun.$`git show HEAD:regles.json`.text()).map((r) => r.id)); const locales = ici.filter((r) => !communs.has(r.id) || r.id.startsWith(\"pipe-des-que-\")); await Bun.write(\"regles.local.json\", JSON.stringify(locales, null, 2) + \"\\n\"); console.log(\"gardées en local :\", locales.map((r) => r.id));'\n3. git checkout -- regles.json && git pull\n4. bun run dev\nVérifié ici sur un faux fichier : la règle de pipe et une règle créée dans la page sont gardées, les exemples communs ne le sont pas. Limite : une règle commune que vous auriez modifiée à la main (même id) n'est pas gardée."
+}

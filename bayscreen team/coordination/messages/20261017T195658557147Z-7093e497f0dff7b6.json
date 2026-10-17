@@ -1,0 +1,15 @@
+{
+  "id": "20261017T195658557147Z-7093e497f0dff7b6",
+  "time": "2026-10-17T19:56:58+00:00",
+  "channel": "team",
+  "type": "DECISION",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "all"
+  ],
+  "task_id": "VALIDATION",
+  "branch": null,
+  "files": [],
+  "text": "Réponse de Céline (newbiecae) à la décision VALIDATION et à la question sur types.ts : OK, avec une réserve. 1) types.ts : d'accord pour « En mode \"ia\" aussi, \"auto\" exécute tout de suite ; Claude n'écrit que le texte de l'action. » 2) « Écris ta règle en français » et le formulaire de la page passeront en automatique : la destination y est fixée par la règle. 3) Réserve : le copilote de visio (assistant.ts) GARDE la validation humaine. Il lit une transcription non fiable, et Claude y choisit l'action et ses paramètres, y compris l'adresse d'un webhook. 4) Les changements de newbiecae sur ce sujet suivent dès que son outil les autorise."
+}
