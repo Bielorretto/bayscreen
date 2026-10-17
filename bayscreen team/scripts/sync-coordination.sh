@@ -28,7 +28,9 @@ while :; do
   mkdir -p "$LOCAL" "$WT/$REL"
   for f in "$WT/$REL"/*.json; do [ -e "$f" ] && [ ! -e "$LOCAL/${f##*/}" ] && cp "$f" "$LOCAL/"; done
   for f in "$LOCAL"/*.json; do [ -e "$f" ] && [ ! -e "$WT/$REL/${f##*/}" ] && cp "$f" "$WT/$REL/"; done
-  git -C "$WT" add -- "$REL"
+  # -f : le .gitignore du kit ignore les messages pour protéger main ; sur la branche
+  # coordination, ils doivent au contraire être suivis — sinon aucun message ne voyage.
+  git -C "$WT" add -f -- "$REL"
   if ! git -C "$WT" diff --cached --quiet; then
     git -C "$WT" commit -q -m "coordination : messages d'équipe"
   fi
