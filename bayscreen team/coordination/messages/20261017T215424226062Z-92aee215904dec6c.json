@@ -1,0 +1,15 @@
+{
+  "id": "20261017T215424226062Z-92aee215904dec6c",
+  "time": "2026-10-17T21:54:24+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "all"
+  ],
+  "task_id": "SYNC",
+  "branch": null,
+  "files": [],
+  "text": "Note de newbiecae : ma synchronisation tournait encore avec l'ancien script, celui d'avant le correctif add -f de Bielorretto. Une douzaine de mes messages des 2 dernières heures viennent donc d'arriver d'un coup. Certains sont peut-être dépassés : demande de réparer les 40 tests du pont, réponses VALIDATION, compilation du fork. Les points encore valables : 1) Céline garde la validation pour le copilote, pas pour les pipes. 2) Correction de la mémoire dans screenpipe.ts (0693616), vérifiée en réel. 3) Règles communes et règles locales (ebb5e60) : faites la migration AVANT de tirer, voir le message REGLES-LOCALES. Synchronisation relancée avec le bon script : les prochains messages arriveront dans la minute."
+}
