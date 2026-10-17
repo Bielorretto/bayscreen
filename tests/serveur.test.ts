@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { config } from "../src/config";
+import { texteBrut } from "../src/screenpipe";
 import { notificationPour, origineAcceptee, poserRegle, validerOuRefuser } from "../src/serveur";
 import type { Action, MessageUI, Regle } from "../src/types";
 
@@ -44,6 +45,18 @@ test("notificationPour : une proposition reste affichée et mène à la page, o�
   expect(n.body).toContain("Pourquoi");
   expect(notificationPour({ type: "action", action: action({ statut: "executee" }) })).toBeNull();
   expect(notificationPour({ type: "journal", ligne: { date: "", niveau: "info", message: "x" } })).toBeNull();
+});
+
+test("notificationPour : une pipe que screenpipe ne lance pas dit comment débloquer, avec un bouton deeplink s'il y en a un", () => {
+  const echec = (nom: string, erreur: string) => notificationPour({ type: "action", action: action({ nom, statut: "echec", erreur }) })!;
+  const plein = echec("pipe.lancer", "No space left on device (os error 28)");
+  expect(plein.body).toBe(`${texteBrut("No space left on device (os error 28)")}\n\nPour débloquer : le disque est plein ; libérez de la place, puis relancez la pipe.`);
+  expect(plein.actions).toEqual([{ id: "stockage", label: "Libérer de la place", type: "deeplink", url: "screenpipe://settings?section=storage" }]);
+  const ferme = echec("pipe.lancer", "ECONNREFUSED: Unable to connect. Is the computer able to access the url?");
+  expect(ferme.body).toEndWith("\n\nPour débloquer : screenpipe ne répond pas ; relancez l'appli screenpipe, puis la pipe.");
+  expect(ferme.actions).toBeUndefined();
+  // Les autres actions en échec : inchangé.
+  expect(echec("discord.envoyer", "webhook → 500")).toEqual({ pipe_name: "des-que", title: "Dès que : discord.envoyer en échec", body: texteBrut("webhook → 500"), priority: "high" });
 });
 
 test("validerOuRefuser : depuis l'appli screenpipe, seulement le branchement d'une pipe qui existe", async () => {

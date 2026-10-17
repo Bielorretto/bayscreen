@@ -76,6 +76,9 @@ export const screenpipe = {
   lancerPipe: (id: string, corps: { run_context?: Record<string, unknown> } = {}) =>
     sp(`/pipes/${encodeURIComponent(id)}/run`, { method: "POST", body: JSON.stringify(corps) }),
 
+  /** Sort d'un lancement, par l'execution_id que renvoie /run : { data: exécution } (get_pipe_execution, lu dans le source de l'appli 2.7.109). */
+  executionPipe: (id: string, execution: number) => sp<{ data?: ExecutionPipe }>(`/pipes/${encodeURIComponent(id)}/executions/${execution}`),
+
   /** Notification dans l'appli screenpipe : sidecar Tauri, port 11435, sans clé (vérifié : 200). Jusqu'à 5 boutons. */
   notifier: async (n: NotificationScreenpipe) => {
     const res = await fetch("http://localhost:11435/notify", {
@@ -200,6 +203,12 @@ export type NotificationScreenpipe = {
   autoDismissMs?: number;
   actions?: BoutonNotification[];
 };
+
+/**
+ * Une exécution de pipe (PipeExecution, pipes/mod.rs ; extrait). status : queued, running, puis completed, failed, cancelled
+ * ou timed_out (vérifié). stderr et error_message peuvent contenir ce que la pipe a lu (écran, mails) : texte non fiable.
+ */
+export type ExecutionPipe = { status: string; stderr: string; error_message: string | null };
 
 export type EvenementBrut = { name: string; data: any };
 

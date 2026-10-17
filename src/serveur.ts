@@ -1,6 +1,7 @@
 // Propriétaire : Dev 2. Serveur local : page web, API de pilotage, WebSocket vers la page.
 // Écoute seulement 127.0.0.1 : rien n'est exposé sur le réseau.
 
+import { pourDebloquer } from "./actions";
 import { config } from "./config";
 import type { Copilote } from "./copilote";
 import type { Moteur } from "./moteur";
@@ -86,8 +87,17 @@ export function notificationPour(m: MessageUI): NotificationScreenpipe | null {
       ],
     };
   }
-  if (m.type === "action" && m.action.statut === "echec")
-    return { pipe_name: "des-que", title: `Dès que : ${m.action.nom} en échec`, body: texteBrut(m.action.erreur), priority: "high" };
+  if (m.type === "action" && m.action.statut === "echec") {
+    // Une pipe que screenpipe n'a pas lancée (préréglage IA, disque plein, appli fermée…) : dire comment débloquer.
+    const d = m.action.nom === "pipe.lancer" ? pourDebloquer(String(m.action.erreur ?? "")) : undefined;
+    return {
+      pipe_name: "des-que",
+      title: `Dès que : ${m.action.nom} en échec`,
+      body: texteBrut(m.action.erreur) + (d ? `\n\n${d.texte}` : ""),
+      priority: "high",
+      ...(d?.bouton && { actions: [d.bouton] }),
+    };
+  }
   if (m.type === "reveil") return { pipe_name: "des-que", title: "Dès que : je vous écoute", body: "Posez votre question.", priority: "low", autoDismissMs: 8000 };
   if (m.type === "reponse")
     return { pipe_name: "des-que", title: "Dès que : réponse", body: `${texteBrut(m.question)}\n\n${texteBrut(m.reponse)}`, autoDismissMs: 0 };

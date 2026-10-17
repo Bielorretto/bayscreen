@@ -1,17 +1,97 @@
 // Propriétaire : Dev 2. Les exécuteurs : ce que le moteur sait faire dans le monde extérieur.
 // Ajouter un exécuteur = ajouter une entrée ici, puis l'autoriser dans les règles.
 
-import { screenpipe, texteBrut } from "./screenpipe";
+import { screenpipe, texteBrut, type BoutonNotification } from "./screenpipe";
 import type { Bus } from "./types";
 
 export type Executeur = (params: Record<string, unknown>, bus: Bus) => Promise<unknown>;
 
-/** POST /pipes/:id/run ; corps : { run_context } facultatif (sinon « {} »). Sert aussi au pont « dès que » (pipes-des-que.ts). */
-export async function lancerPipe(pipe: string, corps?: { run_context?: Record<string, unknown> }) {
+/**
+ * POST /pipes/:id/run ; corps : { run_context } facultatif (sinon « {} »). Sert aussi au pont « dès que » (pipes-des-que.ts).
+ * screenpipe répond tout de suite, la pipe tourne ensuite : avec un bus, son sort est suivi à part (suivreExecution).
+ */
+export async function lancerPipe(pipe: string, corps?: { run_context?: Record<string, unknown> }, bus?: Bus) {
   const r = (await screenpipe.lancerPipe(pipe, corps)) as Record<string, unknown> | null;
   // screenpipe répond 200 même quand le pipe échoue : l'erreur est dans le corps.
   if (r && typeof r === "object" && "error" in r) throw new Error(String(r.error).slice(0, 300));
+  // Sans await : ni l'exécuteur ni emettre, qui l'attend (et POST /api/evenements avec lui), n'attendent la fin de la pipe.
+  const execution = Number(r?.execution_id);
+  if (bus && Number.isSafeInteger(execution) && execution > 0) void suivreExecution(pipe, execution, bus);
   return r;
+}
+
+/** Relevé d'une exécution lancée : toutes les 3 s, 15 min au plus (réglable par les tests). */
+export const suivi = { pasMs: 3_000, limiteMs: 15 * 60_000 };
+
+/**
+ * Relève l'exécution jusqu'à un statut final (queued et running ne le sont pas), ou la limite ; ne lève jamais.
+ * completed : une ligne d'info. Autre statut final (failed, timed_out, cancelled) : une alerte au journal et UNE notification
+ * screenpipe, avec la cause et comment débloquer. stderr et error_message peuvent contenir ce que la pipe a lu (écran, mails) :
+ * ils ne vont qu'au corps de la notification, nettoyés (causeLisible), jamais au journal, que GET /api/etat sert à toute requête locale.
+ */
+async function suivreExecution(pipe: string, execution: number, bus: Bus) {
+  const quoi = `pipe « ${pipe} » : exécution ${execution}`;
+  try {
+    for (const fin = Date.now() + suivi.limiteMs; Date.now() < fin; ) {
+      await Bun.sleep(suivi.pasMs);
+      const e = (await screenpipe.executionPipe(pipe, execution))?.data;
+      if (!e?.status || e.status === "queued" || e.status === "running") continue;
+      if (e.status === "completed") return bus.journaliser("info", `${quoi} terminée`);
+      const d = pourDebloquer(`${e.error_message ?? ""}\n${e.stderr ?? ""}`);
+      bus.journaliser("alerte", `${quoi} en échec (${e.status}). ${d.texte}`);
+      return await screenpipe.notifier({
+        pipe_name: "des-que",
+        title: `Dès que : la pipe « ${pipe} » n'a pas pu tourner`,
+        body: `${texteBrut(causeLisible(e.error_message, e.stderr) || `statut ${e.status}, sans message d'erreur`)}\n\n${d.texte}`,
+        priority: "high",
+        autoDismissMs: 0,
+        ...(d.bouton && { actions: [d.bouton] }),
+      });
+    }
+    bus.journaliser("alerte", `${quoi} toujours en cours après ${Math.round(suivi.limiteMs / 60_000)} min : suivi arrêté`);
+  } catch (err: any) {
+    bus.journaliser("alerte", `${quoi} : suivi interrompu (${causeLisible(err?.message ?? err)})`);
+  }
+}
+
+const REGLAGES: BoutonNotification = { id: "reglages", label: "Ouvrir les réglages", type: "deeplink", url: "screenpipe://settings" };
+/** Table fermée, dans l'ordre : le premier motif trouvé dans le texte d'erreur donne le conseil ; la dernière ligne, sinon. */
+const DEBLOCAGES: [RegExp, string, BoutonNotification?][] = [
+  [/failed to load extension/i, "l'agent des pipes de screenpipe a une extension de version incompatible ; mettez screenpipe à jour ou ramenez l'extension à une version compatible, puis relancez la pipe."],
+  [/not signed in|claude\.ai subscription/i, "dans les réglages IA de screenpipe, créez le préréglage « Claude API », collez-y votre clé, cliquez sur Test, puis sur l'étoile pour en faire le préréglage par défaut.", REGLAGES],
+  [/no space left on device|ENOSPC/i, "le disque est plein ; libérez de la place, puis relancez la pipe.", { id: "stockage", label: "Libérer de la place", type: "deeplink", url: "screenpipe://settings?section=storage" }],
+  [/api[ _-]?key|credit|quota|billing|usage limit/i, "clé refusée ou crédit épuisé ; vérifiez le préréglage IA dans les réglages de screenpipe (clé, crédit), puis relancez la pipe.", REGLAGES],
+  [/ECONNREFUSED|unable to connect|connection refused/i, "screenpipe ne répond pas ; relancez l'appli screenpipe, puis la pipe."],
+  [/^/, "ouvrez l'historique de la pipe dans screenpipe pour lire l'erreur complète."],
+];
+
+/**
+ * « Pour débloquer : … » d'après le texte d'une erreur de pipe (error_message et stderr, ou refus de lancement). Texte fixe :
+ * rien du texte d'erreur n'y passe. Bouton deeplink (ouvert par screenpipe en Rust, donc fiable) quand un réglage s'y prête.
+ */
+export function pourDebloquer(erreur: string): { texte: string; bouton?: BoutonNotification } {
+  const [, conseil, bouton] = DEBLOCAGES.find(([motif]) => motif.test(erreur))!;
+  return { texte: `Pour débloquer : ${conseil}`, bouton };
+}
+
+/**
+ * Première ligne utile (une lettre ou un chiffre) du premier texte qui en a une, pour l'affichage seulement : sur une ligne,
+ * 300 caractères au plus, tout ce qui ressemble à une clé masqué. Texte non fiable : jamais vers un modèle ni un shell.
+ */
+export function causeLisible(...textes: unknown[]): string {
+  for (const t of textes) {
+    const ligne = String(t ?? "").split(/[\r\n\u2028\u2029]/).find((l) => /[\p{L}\p{N}]/u.test(l));
+    if (ligne)
+      return ligne
+        .slice(0, 1_000) // borne le travail des expressions ci-dessous
+        .replace(/[\s\p{C}]+/gu, " ")
+        .replace(/\b([\w-]*(?:api[_-]?key|token|secret|password))(["']?\s*[:=]\s*["']?)[^\s"',;&]+/gi, "$1$2[clé masquée]")
+        .replace(/\b(bearer)\s+\S+/gi, "$1 [clé masquée]")
+        .replace(/\bsk-[\w-]+/g, "[clé masquée]")
+        .trim()
+        .slice(0, 300);
+  }
+  return "";
 }
 
 function texte(params: Record<string, unknown>, cle = "text"): string {
@@ -93,10 +173,10 @@ export const executeurs: Record<string, Executeur> = {
     return { ouverte: url.href };
   },
 
-  /** Lance un pipe screenpipe existant (POST /pipes/:id/run), sans contexte. */
-  "pipe.lancer": async (params) => {
+  /** Lance un pipe screenpipe existant (POST /pipes/:id/run), sans contexte ; son exécution est suivie à part. */
+  "pipe.lancer": async (params, bus) => {
     if (typeof params.pipe !== "string") throw new Error("paramètre « pipe » manquant");
-    return lancerPipe(params.pipe);
+    return lancerPipe(params.pipe, undefined, bus);
   },
 
   // TODO Dev 2 : "mail.repondre", "notion.creer", "linear.creer" via /connections/:id/proxy/...

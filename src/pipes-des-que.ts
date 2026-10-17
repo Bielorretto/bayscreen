@@ -7,7 +7,8 @@
 // pipe retirée arrête sa règle. Au lancement, la pipe est revérifiée, puis reçoit en contexte (run_context) son
 // déclencheur et des nombres de l'événement, jamais son texte ;
 // et, si sa règle en déclare (extraction bornée), des valeurs fermées que Claude a lues dans ce texte, dans le moteur et
-// sans outil : un choix parmi une liste fixe, un nombre ou un booléen, revérifiés par le moteur.
+// sans outil : un choix parmi une liste fixe, un nombre ou un booléen, revérifiés par le moteur. Elle reçoit aussi une
+// consigne : un accès qui bloque, son agent le dit à l'utilisateur ; et son exécution est suivie (actions.ts, suivreExecution).
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -333,7 +334,9 @@ export async function traduireDeclencheur(pipe: string, titre: string, declenche
   const essais = rejouerEssais(regle, t.essais);
   const manques = acces.filter((a) => !a.ok).map((a) => `${a.acces} : ${a.detail}`);
   if (manques.length || !essais.ok) {
-    return { ...base, statut: "refusee", regle, acces, essais: essais.lignes, motif: [...manques, ...(essais.ok ? [] : ["essais en échec"])].join(" ; ") };
+    // Un accès qui manque se dit en tête (état affiché sous le déclencheur dans screenpipe, journal) : à débloquer d'abord.
+    const motif = manques.length ? `À débloquer d'abord : ${manques.join(" ; ")}${essais.ok ? "" : " (et essais en échec)"}` : "essais en échec";
+    return { ...base, statut: "refusee", regle, acces, essais: essais.lignes, motif };
   }
   return { ...base, statut: "a_valider", regle, acces, essais: essais.lignes };
 }
@@ -550,11 +553,14 @@ async function valeursExtraites(pipe: string, regle: Regle, ex: Extraction[], li
  * Lancement par une règle du pont : la pipe est revérifiée. Retirée, désactivée, déclencheur modifié depuis la validation,
  * ou règle différente de celle validée : elle ne part pas et sa règle s'arrête. Sinon elle reçoit en run_context son
  * déclencheur, les nombres listés par la règle validée et, si cette règle en extrait, les valeurs que Claude a lues dans le
- * texte de l'événement (jamais params.lire). Hors moteur, ou sans règle du pont active : l'exécuteur d'origine.
+ * texte de l'événement (jamais params.lire), et la consigne d'accès. Hors moteur, ou sans règle du pont active : l'exécuteur d'origine.
  * params.lire est retiré de l'action avant tout await : params est l'objet même de l'action que garde le moteur, servie
  * par GET /api/etat, /ws et la synchronisation. Seule sa diffusion à la création (moteur.ts, creerAction) le porte encore.
  */
 const lancerHorsPont = executeurs["pipe.lancer"]!;
+/** Dite à l'agent de toute pipe lancée par le pont (éprouvée avec Claude Code le 17 oct., essai B) : il ne contourne pas un accès qui bloque, il le signale. */
+const CONSIGNE_ACCES =
+  "Si une ressource dont tu as besoin est inaccessible (outil absent, connexion non branchée, autorisation, clé, réseau), ne contourne rien et n'invente rien : envoie une notification screenpipe qui dit ce qui bloque et exactement comment le débloquer, puis arrête-toi.";
 executeurs["pipe.lancer"] = async (params, bus) => {
   const lire = params.lire;
   delete params.lire;
@@ -584,7 +590,8 @@ executeurs["pipe.lancer"] = async (params, bus) => {
   const extraites = ex.length ? await valeursExtraites(pipe, regle, ex, lire, texte, bus) : {};
   // Claude a pu prendre jusqu'à 30 s : une règle arrêtée ou remplacée entre-temps ne lance plus rien.
   if (ex.length && !bus.regles.includes(regle)) throw new Error("règle arrêtée ou modifiée pendant l'extraction : non lancée");
-  return lancerPipe(pipe, { run_context: { source: "des-que", condition: texte, evenement: { ...nombresTransmis(regle, params.evenement), ...extraites } } });
+  const evenement = { ...nombresTransmis(regle, params.evenement), ...extraites };
+  return lancerPipe(pipe, { run_context: { source: "des-que", condition: texte, evenement, consigne: CONSIGNE_ACCES } }, bus);
 };
 
 /**
