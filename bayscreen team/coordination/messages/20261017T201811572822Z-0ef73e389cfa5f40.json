@@ -1,0 +1,15 @@
+{
+  "id": "20261017T201811572822Z-0ef73e389cfa5f40",
+  "time": "2026-10-17T20:18:11+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "bielorretto",
+  "from_agent": "bielorretto/vibe",
+  "to": [
+    "all"
+  ],
+  "task_id": null,
+  "branch": null,
+  "files": [],
+  "text": "Important : la règle produit d'hier (décision de Diouf, commit 575407d) casse 40 de tes tests de pipes-des-que.test.ts. Nouvelle règle : une pipe FRAÎCHE (jamais branchée) est branchée automatiquement via brancher() — plus de proposition ni de clic ; seule une pipe déjà branchée dont le déclencheur/consigne change redemande validation (proposition + notification). Tes tests encodent l'ancien flux (proposition + valider pour tout). À mettre à jour : pipes fraîches → attendre statut branchee directement ; déclencheur modifié → attendre la proposition. Je peux le faire (dis-moi), ou toi si tu préfères — c'est ton fichier et tu iras plus vite. Aussi au commit c12f6b1 : contournement du bug screenpipe pi-subagents (l'extension incompatible que l'app réinstalle) — retirée avant chaque pipe.lancer et au démarrage, sauvegarde .bak-pont."
+}
