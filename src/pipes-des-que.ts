@@ -3,11 +3,13 @@
 // (screenpipe-core, pipes/mod.rs : « future: matched via embedding similarity »). Ce pont lit les pipes,
 // fait traduire chaque déclencheur par Claude en règle déterministe, vérifie les accès dont elle a besoin,
 // rejoue des essais sans Claude, puis PROPOSE le branchement : rien ne tourne avant le clic « Valider ».
-// Un déclencheur modifié dans screenpipe est retraduit ; une pipe retirée arrête sa règle. Au lancement, la pipe est
-// revérifiée, puis reçoit en contexte (run_context) son déclencheur et des nombres de l'événement, jamais son texte ;
+// Un déclencheur modifié dans screenpipe est retraduit, comme la consigne modifiée d'une pipe pas encore branchée ; une
+// pipe retirée arrête sa règle. Au lancement, la pipe est revérifiée, puis reçoit en contexte (run_context) son
+// déclencheur et des nombres de l'événement, jamais son texte ;
 // et, si sa règle en déclare (extraction bornée), des valeurs fermées que Claude a lues dans ce texte, dans le moteur et
 // sans outil : un choix parmi une liste fixe, un nombre ou un booléen, revérifiés par le moteur.
 
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { executeurs, lancerPipe } from "./actions";
@@ -382,6 +384,10 @@ const resumeRegle = (r: Regle) => {
   return `dès que ${r.desQue.source}/${r.desQue.type}${si ? ` si ${si}` : ""} → lancer la pipe, en envoyant à son modèle ${transmis(r)}${jamais}`;
 };
 const lirePipes = async () => (await sp<{ data?: PipeListee[] }>("/pipes")).data ?? [];
+/** Consigne d'une pipe : le corps de son pipe.md (prompt_body de GET /pipes) ; "" sans. */
+const consigneDe = (p: PipeListee | undefined) => (typeof p?.prompt_body === "string" ? p.prompt_body : "");
+/** Empreinte d'une consigne : modifiée, elle retraduit une pipe pas encore branchée et périme sa proposition. */
+export const empreinteConsigne = (consigne: string) => createHash("sha256").update(consigne).digest("hex").slice(0, 16);
 
 /** Ce qu'un humain a validé pour une pipe : le texte de son déclencheur et la règle qui en est née, à l'identique. */
 type Validation = { texte: string; desQue: Regle["desQue"]; alors: Regle["alors"] };
@@ -403,7 +409,8 @@ function ecrireValidation(pipe: string, v: Validation) {
   mkdirSync(dirname(fichierValides()), { recursive: true });
   writeFileSync(fichierValides(), JSON.stringify(valides, null, 2) + "\n");
 }
-// Déclencheurs déjà traités pendant cette session (proposés ou refusés) : pas de nouvel appel à Claude tant qu'ils ne changent pas.
+// Déclencheur et empreinte de consigne déjà traités pendant cette session (proposés ou refusés) : pas de nouvel appel à
+// Claude tant qu'aucun des deux ne change.
 const traites = new Map<string, string>();
 
 export type EtatPipe = Pick<RapportPipe, "declencheur" | "acces" | "essais" | "motif"> & {
@@ -451,11 +458,12 @@ async function brancher(params: Record<string, unknown>, bus: Bus) {
   if (!regle || !alors || !ex?.ok || regle.id !== idReglePipe(pipe) || alors.action !== "pipe.lancer" || JSON.stringify(alors.params) !== JSON.stringify(paramsPipe(pipe, regle.desQue, ex.spec))) {
     throw new Error("règle de pipe invalide");
   }
-  // Vérifié au moment de brancher : le déclencheur a pu changer, ou la pipe disparaître, depuis la proposition.
-  const cfg = (await lirePipes()).find((p) => p.config?.name === pipe)?.config;
+  // Vérifié au moment de brancher : le déclencheur ou la consigne ont pu changer, ou la pipe disparaître, depuis la proposition.
+  const p = (await lirePipes()).find((x) => x.config?.name === pipe);
+  const cfg = p?.config;
   const texte = texteDeclencheur(cfg?.trigger?.custom);
-  if (!cfg || cfg.enabled === false || texte !== params.declencheur) {
-    throw new Error("déclencheur modifié ou pipe retirée depuis la proposition : rien n'est branché");
+  if (!cfg || cfg.enabled === false || texte !== params.declencheur || empreinteConsigne(consigneDe(p)) !== params.empreinteConsigne) {
+    throw new Error("déclencheur ou consigne modifiés, ou pipe retirée, depuis la proposition : rien n'est branché");
   }
   // Validation enregistrée, puis règle armée, sans await entre les deux.
   ecrireValidation(pipe, { texte, desQue: regle.desQue, alors: regle.alors });
@@ -582,8 +590,9 @@ executeurs["pipe.lancer"] = async (params, bus) => {
 /**
  * Synchronisation, appelée toutes les minutes (main.ts) et par la route API. D'abord, sans attendre Claude, elle arrête
  * la règle de toute pipe retirée, désactivée, sans déclencheur, au déclencheur modifié, ou dont la règle n'est pas celle
- * validée. Puis, pour chaque pipe à déclencheur custom : déjà validée et inchangée → rien ; nouvelle ou modifiée →
- * traduction, accès, essais, puis action à valider.
+ * validée. Puis, pour chaque pipe à déclencheur custom : déjà validée, déclencheur inchangé → rien, même si sa consigne a
+ * changé depuis ; nouvelle, déclencheur modifié, ou consigne modifiée avant la validation → traduction, accès, essais,
+ * puis action à valider.
  */
 async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
   const pipes = await lirePipes();
@@ -631,19 +640,22 @@ async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
     const titre = String(cfg.title ?? nom);
     const regle = moteur.regles.find((r) => r.id === idReglePipe(nom));
     const v = lireValides()[nom]; // relue : un branchement a pu être validé pendant la traduction d'une autre pipe
-    if ((regle?.active && v?.texte === texte && estValidee(regle, v)) || traites.get(nom) === texte) {
+    const consigne = consigneDe(p);
+    // Déclencheur et consigne : la consigne fait le spec « extraire ». Une pipe branchée garde son spec validé.
+    const traite = `${texte}\u0000${empreinteConsigne(consigne)}`;
+    if ((regle?.active && v?.texte === texte && estValidee(regle, v)) || traites.get(nom) === traite) {
       rapports.push({ pipe: nom, titre, declencheur: texte, statut: "deja" });
       continue;
     }
     traites.delete(nom); // traduction en échec : revenir ensuite à l'ancien texte le retraduit, au lieu de « déjà traité »
-    const r = await traduireDeclencheur(nom, titre, texte, cfg, typeof p.prompt_body === "string" ? p.prompt_body : "");
+    const r = await traduireDeclencheur(nom, titre, texte, cfg, consigne);
     rapports.push(r);
     etats.set(nom, { declencheur: texte, statut: r.statut as EtatPipe["statut"], regle: r.regle && resumeRegle(r.regle), acces: r.acces, essais: r.essais, motif: r.motif });
     if (r.statut === "erreur") {
       moteur.journaliser("erreur", `pipe « ${nom} » : ${r.motif}`);
       continue; // réessayé à la prochaine synchronisation
     }
-    traites.set(nom, texte);
+    traites.set(nom, traite);
     if (r.statut === "refusee") {
       moteur.journaliser("alerte", `pipe « ${nom} » non branchée : ${r.motif}`);
       continue;
@@ -658,7 +670,7 @@ async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
     ].join("\n");
     const action = moteur.creerAction({
       nom: "pipe.brancher",
-      params: { text: `Brancher la pipe « ${titre} » : ${resumeRegle(r.regle!)}`, pipe: nom, declencheur: texte, regle: r.regle },
+      params: { text: `Brancher la pipe « ${titre} » : ${resumeRegle(r.regle!)}`, pipe: nom, declencheur: texte, empreinteConsigne: empreinteConsigne(consigne), regle: r.regle },
       preuve,
     });
     etats.get(nom)!.actionId = action.id;

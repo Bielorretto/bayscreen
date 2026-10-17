@@ -10,7 +10,7 @@ process.env.FICHIER_PIPES_DES_QUE = join(dossier, "valides.json");
 
 // Claude et screenpipe simulés : aucun appel réseau.
 let appelsClaude = 0;
-/** Réponse de Claude à une traduction ; une Error : appel en échec ; une fonction : réponse attendue (promesse). */
+/** Réponse de Claude à une traduction ; une Error : appel en échec ; une fonction (reçoit la demande) : réponse attendue (promesse). */
 let traduction: unknown;
 /** Réponse de Claude à une extraction, au lancement d'une pipe (mêmes formes). */
 let extraction: unknown;
@@ -25,7 +25,7 @@ mock.module("../src/claude", () => ({
     demandeClaude = o;
     demandes.push(o);
     const reponse = o.schema?.properties?.possible ? traduction : extraction; // seul le schéma de traduction a « possible »
-    const t = typeof reponse === "function" ? await reponse() : reponse;
+    const t = typeof reponse === "function" ? await reponse(o) : reponse;
     if (t instanceof Error) throw t;
     return structuredClone(t);
   },
@@ -51,7 +51,7 @@ afterAll(() => reseau.mockRestore());
 const { config } = await import("../src/config");
 const { Moteur } = await import("../src/moteur");
 const { executeurs } = await import("../src/actions");
-const { rejouerEssais, verifierAcces, synchroniserAutomatiquement, idReglePipe, etatPipes, verifierExtraction } = await import("../src/pipes-des-que");
+const { rejouerEssais, verifierAcces, synchroniserAutomatiquement, idReglePipe, etatPipes, verifierExtraction, empreinteConsigne } = await import("../src/pipes-des-que");
 
 config.fichierSources = join(dossier, "sources.json");
 await Bun.write(config.fichierSources, JSON.stringify([{ type: "web", nom: "Casque audio", url: "http://127.0.0.1:4310/" }, { type: "mail", mailbox: "Commandes" }]));
@@ -211,7 +211,7 @@ test("pipe.brancher : paramètres exactement ceux de son événement (la pipe, e
   const moteur = new Moteur(join(dossier, "regles-params.json"));
   pipes = [pipeCasque("params")];
   const brancherAvec = (params: Record<string, unknown>, desQue: Regle["desQue"] = regle.desQue) =>
-    executeurs["pipe.brancher"]!({ pipe: "params", declencheur: TEXTE, regle: { ...regle, id: idReglePipe("params"), desQue, alors: { mode: "fixe", action: "pipe.lancer", params } } }, moteur);
+    executeurs["pipe.brancher"]!({ pipe: "params", declencheur: TEXTE, empreinteConsigne: empreinteConsigne(""), regle: { ...regle, id: idReglePipe("params"), desQue, alors: { mode: "fixe", action: "pipe.lancer", params } } }, moteur);
   const nombres = { valeur: "{{valeur}}", ancienne: "{{ancienne}}" };
   const surMail = { source: "mail" as const, type: "mail_recu" };
   for (const [params, desQue] of [
@@ -633,13 +633,49 @@ test("traduction : consigne de la pipe dans l'invite ; extraction fermée propos
   expect((await etatPipes(moteur))["couleur-libre"]).toMatchObject({ statut: "refusee", motif: expect.stringContaining("jamais de texte libre") });
 });
 
+test("consigne modifiée, déclencheur inchangé : une pipe pas encore branchée est retraduite ; une proposition périmée ne branche rien", async () => {
+  const moteur = new Moteur(join(dossier, "regles-consigne.json"));
+  // Claude simulé fidèle à la consigne qu'il reçoit : les couleurs proposées sont celles qu'elle permet.
+  traduction = (o: Record<string, any>) => traductionCouleur([{ ...champCouleur, valeurs: String(o.contenu).match(/Couleurs permises : ([^.\n]+)\./)![1]!.split(", ") }]);
+  const pipeAvec = (name: string, couleurs: string) => ({ ...pipeCouleur(name), prompt_body: CONSIGNE_COULEUR.replace(COULEURS.join(", "), couleurs) });
+  const proposees = (pipe: string) => [...moteur.actions.values()].filter((a) => a.nom === "pipe.brancher" && a.statut === "proposee" && a.params.pipe === pipe);
+  const couleursDe = (a: { params: Record<string, unknown> }) => (a.params.regle as any).alors.params.extraire[0].valeurs;
+
+  // Refusée à cause de sa consigne (une couleur de 41 caractères). Inchangée : pas retraduite. Corrigée : retraduite, proposée.
+  pipes = [pipeAvec("consigne-refus", `bleu, ${"r".repeat(41)}`)];
+  expect((await synchroniserAutomatiquement(moteur))[0]).toMatchObject({ statut: "refusee", motif: expect.stringContaining("extraction refusée") });
+  const avant = appelsClaude;
+  expect((await synchroniserAutomatiquement(moteur))[0]!.statut).toBe("deja");
+  expect(appelsClaude).toBe(avant);
+  pipes = [pipeAvec("consigne-refus", "bleu, rouge")];
+  expect((await synchroniserAutomatiquement(moteur))[0]!.statut).toBe("a_valider");
+  expect(appelsClaude).toBe(avant + 1);
+  expect(proposees("consigne-refus").map(couleursDe)).toEqual([["bleu", "rouge"]]);
+  expect((await etatPipes(moteur))["consigne-refus"]?.statut).toBe("a_valider");
+
+  // À valider, puis « vert » retiré de la consigne : la synchronisation suivante repropose avec la consigne actuelle.
+  pipes = [pipeAvec("consigne-propo", "bleu, rouge, vert")];
+  await synchroniserAutomatiquement(moteur);
+  const [perimee] = proposees("consigne-propo");
+  pipes = [pipeAvec("consigne-propo", "bleu, rouge")];
+  expect((await synchroniserAutomatiquement(moteur))[0]!.statut).toBe("a_valider");
+  expect(proposees("consigne-propo").map(couleursDe)).toEqual([["bleu", "rouge", "vert"], ["bleu", "rouge"]]);
+  const neuve = proposees("consigne-propo")[1]!;
+  // Valider la proposition périmée ne branche rien (la pipe recevrait « vert », que sa consigne ne permet plus) ; la neuve, si.
+  await moteur.valider(perimee!.id);
+  expect(moteur.actions.get(perimee!.id)).toMatchObject({ statut: "echec", erreur: expect.stringContaining("rien n'est branché") });
+  expect(moteur.regles.find((r) => r.id === idReglePipe("consigne-propo"))).toBeUndefined();
+  await moteur.valider(neuve.id);
+  expect(moteur.regles.find((r) => r.id === idReglePipe("consigne-propo"))).toMatchObject({ active: true, alors: { params: { extraire: [{ valeurs: ["bleu", "rouge"] }] } } });
+});
+
 test("pipe.brancher : extraction hors règles, ou champs à lire qui ne sont pas les siens → « règle de pipe invalide »", async () => {
   const moteur = new Moteur(join(dossier, "regles-brancher-extraire.json"));
   const pipe = "brancher-extraire";
   pipes = [pipeCouleur(pipe)];
   const desQue: Regle["desQue"] = { source: "mail", type: "mail_recu", si: [{ champ: "expediteur", op: "contient", valeur: "lea.design@atelier-demo.example" }] };
   const brancherAvec = (params: Record<string, unknown>) =>
-    executeurs["pipe.brancher"]!({ pipe, declencheur: COULEUR, regle: { ...regle, id: idReglePipe(pipe), desQue, alors: { mode: "fixe", action: "pipe.lancer", params } } }, moteur);
+    executeurs["pipe.brancher"]!({ pipe, declencheur: COULEUR, empreinteConsigne: empreinteConsigne(CONSIGNE_COULEUR), regle: { ...regle, id: idReglePipe(pipe), desQue, alors: { mode: "fixe", action: "pipe.lancer", params } } }, moteur);
   const lire = { objet: "{{objet}}", corps: "{{corps}}" };
   for (const params of [
     { pipe, extraire: [{ ...champCouleur, type: "texte", valeurs: [] }], lire }, // un texte libre
