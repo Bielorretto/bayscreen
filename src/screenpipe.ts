@@ -62,10 +62,19 @@ export const screenpipe = {
   telegramEnvoyer: (corps: { text: string; instance?: string }) =>
     sp("/connections/telegram/send", { method: "POST", body: JSON.stringify(corps) }),
 
+  /** IMAP, lecture seule (vérifié) : la liste n'a pas le corps, d'où mail(). 401 si IMAP n'est pas branché. */
+  mails: (mailbox: string, limit = 20) =>
+    sp<{ messages?: MessageImap[] }>(`/connections/imap/messages?${new URLSearchParams({ mailbox, limit: String(limit) })}`),
+  mail: (id: number, mailbox: string) =>
+    sp<{ body?: string }>(`/connections/imap/messages/${id}?${new URLSearchParams({ mailbox })}`),
+
   lancerPipe: (id: string) => sp(`/pipes/${encodeURIComponent(id)}/run`, { method: "POST", body: "{}" }),
 };
 
 export type EvenementBrut = { name: string; data: any };
+
+/** from vaut "Nom <adresse>" ; date en ISO 8601 avec décalage (vérifié). */
+export type MessageImap = { id: number; from: string; to: string; subject: string; date: string };
 
 /**
  * Écoute /ws/events (tous les événements internes de screenpipe), avec reconnexion.
