@@ -1,4 +1,4 @@
-import { afterAll, expect, mock, spyOn, test } from "bun:test";
+import { expect, mock, spyOn, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -58,8 +58,9 @@ mock.module("../src/screenpipe", () => ({
 const notifications: Record<string, unknown>[] = [];
 /** Vrai : le panneau de notifications de screenpipe ne répond pas (503). */
 let panneauFerme = false;
-// Filet : une requête qui échapperait aux simulations échoue ici au lieu de partir vers screenpipe ou Claude.
-const reseau = spyOn(globalThis, "fetch").mockImplementation((async (url: unknown, init?: RequestInit) => {
+// Filet : une requête qui échapperait aux simulations échoue ici au lieu de partir vers screenpipe ou Claude. Jamais retiré
+// (pas de mockRestore) : un suivi encore en vie après ce fichier, si un garde-fou régresse, ne joint pas le vrai screenpipe.
+spyOn(globalThis, "fetch").mockImplementation((async (url: unknown, init?: RequestInit) => {
   if (String(url) === "http://localhost:11435/notify") {
     if (panneauFerme) return new Response("panneau fermé", { status: 503 });
     notifications.push(JSON.parse(String(init?.body)));
@@ -67,7 +68,6 @@ const reseau = spyOn(globalThis, "fetch").mockImplementation((async (url: unknow
   }
   throw new Error(`réseau coupé pendant les tests : ${String(url)}`);
 }) as any);
-afterAll(() => reseau.mockRestore());
 
 const { config } = await import("../src/config");
 const { Moteur } = await import("../src/moteur");
