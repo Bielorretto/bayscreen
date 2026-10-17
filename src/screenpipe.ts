@@ -123,9 +123,17 @@ export async function souvenirs(
     }
   }
   const seuil = Math.min(2, mots.length);
+  const fenetresVues = new Set<string>();
   return [...ecrans.values()]
     .filter((e) => e.mots.size >= seuil)
     .sort((a, b) => b.mots.size - a.mots.size)
+    .filter(({ c }) => {
+      // Un souvenir par fenêtre : un éditeur resté ouvert ne prend pas toutes les places.
+      const fenetre = `${c.app_name}|${c.window_name}`;
+      if (fenetresVues.has(fenetre)) return false;
+      fenetresVues.add(fenetre);
+      return true;
+    })
     .slice(0, o.max ?? 3)
     .map(({ c }) => {
       const t = String(c.text ?? "").replace(/\s+/g, " ");
@@ -156,7 +164,11 @@ export type BoutonNotification = {
   label: string;
   /** api : appelle url ; pipe : lance le pipe nommé, context injecté dans sa consigne ; chat : lance prompt dans le chat */
   type: "api" | "pipe" | "chat" | "deeplink" | "dismiss";
+  /** api : une route de l'API screenpipe seulement (isLocalApiUrl, vérifié), ex. "/connections/discord/proxy" ; screenpipe ajoute la clé */
   url?: string;
+  /** api : POST par défaut ; body est envoyé en JSON */
+  method?: string;
+  body?: unknown;
   pipe?: string;
   prompt?: string;
   context?: Record<string, unknown>;

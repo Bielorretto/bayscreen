@@ -33,6 +33,13 @@ describe("mémoire", () => {
     expect(s[0]!.extrait).toContain("1 290 €");
   });
 
+  test("un souvenir par fenêtre : un éditeur ouvert ne chasse pas la page du devis", async () => {
+    const editeur = (id: number) => ({ ...ecran(id, "devis 42 valider : notes de travail"), content: { ...ecran(id, "devis 42 valider : notes de travail").content, app_name: "Éditeur" } });
+    const data = [editeur(20), editeur(21), editeur(22), ecran(1, "Devis n° 42 — Total : 1 290 €")];
+    const s = await souvenirs("Devis n° 42 à valider", {}, async (p: { q?: string }) => ({ data: data.filter((e) => e.content.text.toLowerCase().includes(String(p.q))) }));
+    expect(s.map((x) => x.appli)).toEqual(["Éditeur", "Navigateur"]);
+  });
+
   test("l'extrait part du corps de la page, pas de l'onglet ni des autres onglets", async () => {
     const page = `Devis n° 42 - Navigateur | Onglet personnel | 127.0.0.1:4310/devis/42 ${"menu ".repeat(80)}Devis n° 42 Client : Camille 10 casques Total : 1 290 € TTC`;
     const s = await souvenirs("Devis n° 42", {}, async () => ({ data: [ecran(9, page)] }));
