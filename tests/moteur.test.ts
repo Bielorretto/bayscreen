@@ -67,6 +67,29 @@ describe("Moteur", () => {
     expect(a!.statut).toBe("executee");
   });
 
+  test("règle ia en validation auto : l'action part tout de suite, et seul le texte vient de Claude", async () => {
+    const claude = async () => ({
+      agir: true,
+      action: "notifier",
+      params_json: JSON.stringify({ text: "cours à 120", lien: "https://piege.example", pipe: "autre" }),
+      raison: "seuil franchi",
+      preuve: "valeur 120",
+    });
+    const regleIa: Regle = { ...regleSeuil, alors: { mode: "ia", consigne: "préviens-moi", actionsPermises: ["notifier"] } };
+    const m = new Moteur("/dev/null", undefined, claude as any);
+    m.regles = [regleIa];
+    await m.emettre(evt({ nom: "cours", valeur: 120 }));
+    const [a] = [...m.actions.values()];
+    expect(a).toMatchObject({ nom: "notifier", statut: "executee", preuve: "valeur 120" });
+    expect(a!.params).toEqual({ text: "cours à 120" });
+    expect(notif.mock.calls.at(-1)?.[0]).not.toHaveProperty("actions");
+
+    const m2 = new Moteur("/dev/null", undefined, claude as any);
+    m2.regles = [{ ...regleIa, validation: "demander" }];
+    await m2.emettre(evt({ nom: "cours", valeur: 120 }));
+    expect([...m2.actions.values()][0]!.statut).toBe("proposee");
+  });
+
   test("anti-boucle : un événement screenpipe émis par des-que ne déclenche rien", async () => {
     const m = new Moteur("/dev/null");
     m.regles = [{ ...regleSeuil, desQue: { source: "screenpipe", type: "*" } }];

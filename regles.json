@@ -68,7 +68,7 @@
         "notifier"
       ]
     },
-    "validation": "demander"
+    "validation": "auto"
   },
   {
     "id": "iss-paris-carte",
