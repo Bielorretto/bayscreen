@@ -100,7 +100,10 @@ export function corpsDiscord(content: string, mention = config.discordMention) {
   return { content: id ? `<@${id}> ${content}` : content, allowed_mentions: { parse: [], users: id ? [id] : [] } };
 }
 
-const MOTS_VIDES = new Set(["avec", "pour", "dans", "votre", "vous", "nous", "merci", "bonjour", "test", "from", "with", "your", "this", "that"]);
+const MOTS_VIDES = new Set(["avec", "pour", "dans", "votre", "vous", "nous", "merci", "bonjour", "test", "from", "with", "your", "this", "that",
+  // Une question dite en visio : sans eux, « quel était le prix du casque audio ? » prend 2 des 4 places et écarte « audio ».
+  "quel", "quelle", "quels", "quelles", "quoi", "combien", "quand", "comment", "pourquoi", "était", "étais", "avait", "avais", "avez", "avons",
+  "sont", "sera", "être", "avoir", "fait", "faire", "peux", "peut", "cette", "celui", "celle", "ceux", "elle", "elles", "mais", "donc", "alors", "aussi", "encore", "déjà"]);
 
 /** Mots d'un texte qui ont des chances de figurer sur un écran lié : 4 lettres ou plus, ou un chiffre. */
 export function motsCles(texte: string, max = 4): string[] {
@@ -127,8 +130,10 @@ export async function souvenirs(
   if (!mots.length) return [];
   const depuis = new Date(Date.now() - (o.depuisMinutes ?? 60) * 60_000).toISOString();
   const ecrans = new Map<number, { mots: Set<string>; c: any }>();
-  for (const q of mots) {
-    const r = await chercher({ q, content_type: "all", limit: 10, start_time: depuis });
+  // Texte d'écran demandé à screenpipe : avec « all », l'audio (capté en permanence) remplit les 10 places.
+  const recherches = mots.flatMap((q) => ["ocr", "accessibility"].map((content_type) => ({ q, content_type })));
+  for (const { q, content_type } of recherches) {
+    const r = await chercher({ q, content_type, limit: 10, start_time: depuis });
     for (const d of r?.data ?? []) {
       if (!/^(ocr|ui|accessibility)$/i.test(String(d?.type)) || typeof d.content?.frame_id !== "number") continue;
       const e = ecrans.get(d.content.frame_id) ?? { mots: new Set<string>(), c: d.content };

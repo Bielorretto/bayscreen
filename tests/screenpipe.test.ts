@@ -20,6 +20,8 @@ describe("mémoire", () => {
   test("motsCles garde les mots parlants et les nombres", () => {
     expect(motsCles("Devis n° 42 à valider")).toEqual(["devis", "42", "valider"]);
     expect(motsCles("Re: OK")).toEqual([]);
+    // Question naturelle posée au copilote : les mots interrogatifs ne prennent pas la place des mots utiles.
+    expect(motsCles("quel était le prix du casque audio ?")).toEqual(["prix", "casque", "audio"]);
   });
 
   // Faux /search : chaque mot renvoie les écrans fictifs qui le contiennent.
@@ -38,6 +40,15 @@ describe("mémoire", () => {
     const s = await souvenirs("Devis n° 42 à valider", {}, chercher);
     expect(s).toHaveLength(1);
     expect(s[0]!.extrait).toContain("1 290 €");
+  });
+
+  test("l'audio ne prend pas les places de l'écran : la recherche ne demande que le texte d'écran", async () => {
+    // Comme screenpipe quand l'audio tourne : « all » ne renvoie que 10 passages audio ; « ocr » renvoie l'écran.
+    const audio = Array.from({ length: 10 }, (_, i) => ecran(100 + i, "prix du casque audio, on en parlait", "Audio"));
+    const s = await souvenirs("quel était le prix du casque audio ?", {}, async (p: { q?: string; content_type?: string }) => ({
+      data: p.content_type === "ocr" ? [ecran(1, "Notification : Casque audio : 89 € (avant : 120 €), prix en baisse")] : p.content_type === "all" ? audio : [],
+    }));
+    expect(s.map((x) => x.extrait)).toEqual([expect.stringContaining("89 €")]);
   });
 
   test("un souvenir par fenêtre : un éditeur ouvert ne chasse pas la page du devis", async () => {
