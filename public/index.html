@@ -6,33 +6,206 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Dès que</title>
 <style>
-  :root { --fond:#f7f7f5; --carte:#fff; --texte:#1c1c1a; --doux:#6b6b66; --bord:#e2e2dc; --accent:#2f6fde; --ok:#2e8b57; --ko:#c0392b; --alerte:#b7791f; }
-  @media (prefers-color-scheme: dark) { :root { --fond:#151513; --carte:#1f1f1c; --texte:#ececE6; --doux:#9a9a93; --bord:#33332f; } }
-  * { box-sizing: border-box; }
-  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--fond); color:var(--texte); }
-  header { display:flex; align-items:center; gap:16px; padding:12px 20px; border-bottom:1px solid var(--bord); }
-  h1 { font-size:18px; margin:0; }
-  .pastille { padding:2px 10px; border-radius:99px; border:1px solid var(--bord); color:var(--doux); }
-  .pastille.on { color:var(--ok); border-color:var(--ok); }
-  main { display:grid; grid-template-columns: 1.1fr 1.2fr 1fr; gap:16px; padding:16px 20px; }
-  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
-  section { background:var(--carte); border:1px solid var(--bord); border-radius:10px; padding:14px; min-height:120px; }
-  h2 { font-size:14px; margin:0 0 10px; }
-  .item { border-top:1px solid var(--bord); padding:8px 0; }
-  .item:first-of-type { border-top:0; }
-  .doux { color:var(--doux); font-size:12px; }
-  code, pre { font:12px ui-monospace, monospace; white-space:pre-wrap; word-break:break-word; }
-  button { font:inherit; padding:4px 10px; border-radius:6px; border:1px solid var(--bord); background:transparent; color:var(--texte); cursor:pointer; }
-  button.ok { border-color:var(--ok); color:var(--ok); } button.ko { border-color:var(--ko); color:var(--ko); }
-  .executee { color:var(--ok); } .echec, .erreur { color:var(--ko); } .refusee { color:var(--doux); } .alerte { color:var(--alerte); }
-  #visio.reveil { outline:3px solid var(--accent); }
-  #ecoute { display:none; color:var(--accent); font-weight:600; margin:6px 0; }
-  #visio.reveil #ecoute { display:block; }
-  #transcription { max-height:180px; overflow:auto; }
-  .micro { font-weight:600; }
-  input, textarea, select { font:inherit; width:100%; padding:6px; border:1px solid var(--bord); border-radius:6px; background:transparent; color:var(--texte); }
-  form { display:grid; gap:6px; margin-top:8px; }
-  .reponse { background:color-mix(in srgb, var(--accent) 8%, transparent); border-radius:8px; padding:8px; margin-top:8px; }
+  /* Style calqué sur l'appli screenpipe v2.7.109 (apps/screenpipe-app-tauri) : jetons de
+     app/globals.css, composants de components/ui (bouton, carte, champ, liste déroulante),
+     écran Automations (components/settings/pipes-section.tsx). Encre sur « bone », filets
+     de 1px, rayons de 8px (surfaces) et 6px (contrôles), sans pour le contenu, mono pour ce
+     qui sort de la machine. Aucune ressource externe : polices du système. */
+  :root {
+    color-scheme: light;
+    --background: 60 14% 96%;         /* #F6F6F3 canevas « bone » */
+    --foreground: 0 0% 4%;            /* #0A0A0A encre */
+    --card: 0 0% 100%;                /* surfaces de travail */
+    --primary: 0 0% 4%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 60 11% 93%;
+    --muted-foreground: 0 0% 40%;     /* #666666 : 5,7:1 sur blanc */
+    --accent: 60 11% 93%;
+    --border: 60 9% 86%;              /* #DFDFD8 */
+    --input: 0 0% 100%;               /* fond des champs */
+    --ring: 0 0% 4%;
+    --destructive: 0 0% 0%;           /* noir : l'appli ne colore pas l'échec */
+    --phosphor: 77 100% 62%;          /* #C8FF3D : « ça tourne maintenant », rien d'autre */
+    --phosphor-ink: 0 0% 2%;
+    /* Ajout : texte d'erreur. L'appli écrit red-500 à 80 % (pipes-section.tsx:3376), soit
+       3:1 sur blanc, trop pâle en 12px ; red-600 donne 4,8:1. */
+    --erreur: 0 72% 51%;
+    --radius: .5rem;
+    --radius-lg: var(--radius);               /* 8px : cartes */
+    --radius-md: calc(var(--radius) - 2px);   /* 6px : boutons, champs */
+    --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --ease: cubic-bezier(.4, 0, .2, 1);
+    --pulse: pulse 2s cubic-bezier(.4, 0, .6, 1) infinite;
+    /* chevron-down de lucide, trait encre à 50 % (select.tsx:34) */
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a0a0a' stroke-opacity='.5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --background: 0 0% 4%;          /* #0A0A0A */
+      --foreground: 0 0% 96%;         /* #F5F5F5 */
+      --card: 0 0% 8%;                /* #141414 */
+      --primary: 0 0% 96%;
+      --primary-foreground: 0 0% 4%;
+      --muted: 0 0% 14%;
+      --muted-foreground: 0 0% 64%;   /* #A3A3A3 : 7,4:1 sur #141414 */
+      --accent: 0 0% 14%;
+      --border: 0 0% 20%;             /* #333333 */
+      --input: 0 0% 8%;
+      --ring: 0 0% 96%;
+      --destructive: 0 0% 100%;       /* blanc en sombre */
+      --erreur: 0 91% 71%;            /* red-400 : 6,7:1 sur #141414 */
+      --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f5f5f5' stroke-opacity='.5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    }
+  }
+
+  /* Base (globals.css:279-292 et preflight Tailwind) */
+  *, *::before, *::after { box-sizing: border-box; border: 0 solid hsl(var(--border)); }
+  html { background: hsl(var(--background)); }
+  body { margin: 0; padding: 0 24px 40px; background: hsl(var(--background)); color: hsl(var(--foreground));
+    font-family: var(--font-sans); font-size: 14px; line-height: 20px; }
+  h1, h2, p { margin: 0; font-size: inherit; font-weight: inherit; }
+  b { font-weight: 500; }   /* l'appli ne monte jamais à 700 */
+  button, input, select, textarea { margin: 0; font: inherit; letter-spacing: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+  @keyframes pulse { 50% { opacity: .5; } }
+
+  /* En-tête : nom à gauche, états à droite, filet dessous (barre d'onglets, pipe-store.tsx:394-415) */
+  header, main { max-width: 80rem; margin: 0 auto; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 24px 0 12px;
+    border-bottom: 1px solid hsl(var(--border)); }
+  h1 { margin-right: auto; font-size: 16px; line-height: 24px; font-weight: 500; }
+  /* États : puces de connexion à angles vifs, mono 12px, carré de 6px (pipes-section.tsx:3504) */
+  .pastille { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 6px 12px;
+    border: 1px solid hsl(var(--border)); font-family: var(--font-mono); font-size: 12px; line-height: 16px;
+    color: hsl(var(--muted-foreground)); transition: color 150ms var(--ease), border-color 150ms var(--ease); }
+  .pastille::before { content: ""; flex: none; width: 6px; height: 6px; border: 1px solid currentColor; }
+  .pastille.on { color: hsl(var(--foreground)); border-color: hsl(var(--foreground) / .2); }
+  .pastille.on::before { background: currentColor; }
+  #etat-ws:not(.on) { color: hsl(var(--foreground)); border-color: hsl(var(--destructive) / .5); }  /* connexion perdue */
+
+  /* Grille : trois colonnes à 1280px, une seule colonne de 56rem (max-w-4xl) en fenêtre étroite */
+  main { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 16px; align-items: start; padding-top: 24px; }
+  @media (max-width: 1080px) {
+    header, main { max-width: 56rem; }
+    main { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 480px) {
+    body { padding: 0 16px 32px; }
+    header { padding-top: 16px; }
+    main { padding-top: 16px; }
+  }
+
+  /* Carte : plate, filet, 8px, sans ombre (card.tsx:17) ; titre 14px en 500 (pipes-section.tsx:2637) */
+  section { overflow: hidden; background: hsl(var(--card)); border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-lg); transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease); }
+  h2 { padding: 12px 16px; font-size: 14px; line-height: 20px; font-weight: 500; }
+  .doux { font-size: 12px; line-height: 16px; color: hsl(var(--muted-foreground)); }
+
+  /* Listes : lignes pleine largeur séparées par un filet (divide-y, pipes-section.tsx:4270) */
+  .liste { border-top: 1px solid hsl(var(--border)); }
+  .liste:empty { display: none; }
+  .liste > * { position: relative; padding: 10px 16px; overflow-wrap: anywhere; }
+  .liste > * + * { border-top: 1px solid hsl(var(--border)); }
+  .liste > p { padding: 20px 16px; text-align: center; }          /* état vide */
+  .item > b { color: hsl(var(--foreground)); }
+  .item > code { display: block; margin-top: 2px; font: 12px/16px var(--font-mono);
+    color: hsl(var(--muted-foreground)); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+  /* Extraits (preuves, citations) : filet gauche */
+  #attente .item > .doux, #taches .item > div.doux, .reponse > div + .doux {
+    margin-top: 4px; padding-left: 10px; border-left: 2px solid hsl(var(--border)); }
+  #historique, #journal, #transcription { overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-color: hsl(var(--muted-foreground) / .5) transparent; }
+  #historique::-webkit-scrollbar, #journal::-webkit-scrollbar, #transcription::-webkit-scrollbar { width: 8px; }
+  #historique::-webkit-scrollbar-thumb, #journal::-webkit-scrollbar-thumb, #transcription::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / .4); border-radius: 4px; }
+  #historique:focus-visible, #journal:focus-visible, #transcription:focus-visible { outline-offset: -2px; }
+  #historique { max-height: 24rem; }
+  #journal { max-height: 32rem; }
+
+  /* Carré d'état de 8px, comme les tâches de l'appli (pipes-section.tsx:2905-2916) */
+  #regles > .item, #historique > .item { padding-left: 34px; }
+  #regles > .item::before, .statut::before { content: ""; position: absolute; left: 16px; top: 16px;
+    width: 8px; height: 8px; border: 1px solid hsl(var(--foreground) / .6); background: hsl(var(--foreground) / .6); }
+  #regles > .item > .doux { font-family: var(--font-mono); }
+  #regles > .item > div.doux { margin-top: 2px; }
+  #regles > .item:has(> span.doux) > b { color: hsl(var(--muted-foreground)); }   /* règle inactive */
+  #regles > .item:has(> span.doux)::before { border-color: hsl(var(--muted-foreground) / .4); background: transparent; }
+  #historique > .item { color: hsl(var(--muted-foreground)); }
+  .statut { font-family: var(--font-mono); font-size: 12px; }
+  .statut.validee::before { border-color: hsl(var(--foreground)); background: hsl(var(--foreground)); animation: var(--pulse); }
+  .statut.echec { color: hsl(var(--foreground)); }
+  .statut.echec::before { border-color: hsl(var(--destructive)); background: hsl(var(--destructive)); }
+  .statut.refusee::before { border-color: hsl(var(--muted-foreground) / .4); background: transparent; }
+  #historique > .item > .doux:not(:empty) { display: block; margin-top: 2px; }
+  .statut.echec ~ .doux { color: hsl(var(--erreur)); }
+  #taches > .item > span.doux { font-family: var(--font-mono); }
+
+  /* Journal : heure en mono, message à côté ; alerte = rail encre, erreur = rail et texte rouges */
+  #journal > .item { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px;
+    align-items: baseline; padding: 6px 16px; font-size: 12px; line-height: 16px; }
+  #journal > .item > .doux { font-family: var(--font-mono); }
+  #journal > .alerte { background: hsl(var(--muted) / .3); box-shadow: inset 2px 0 0 hsl(var(--foreground) / .6); }
+  #journal > .erreur { color: hsl(var(--erreur)); box-shadow: inset 2px 0 0 hsl(var(--erreur)); }
+
+  /* Assistant de visio. Au réveil : cadre encre, et le seul point phosphor de la page tant qu'il écoute */
+  #visio.reveil { border-color: hsl(var(--foreground)); box-shadow: 0 0 0 1px hsl(var(--foreground)); }
+  #ecoute { display: none; }
+  #visio.reveil #ecoute { display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+    border-top: 1px solid hsl(var(--border)); font: 500 12px/16px var(--font-mono); }
+  #ecoute::before { content: ""; flex: none; width: 8px; height: 8px; background: hsl(var(--phosphor));
+    box-shadow: inset 0 0 0 1px hsl(var(--phosphor-ink) / .6); animation: var(--pulse); }
+  #transcription { max-height: 180px; padding: 10px 16px; border-top: 1px solid hsl(var(--border)); line-height: 18px; }
+  #transcription > div + div { margin-top: 2px; }
+  .micro { color: hsl(var(--foreground)); font-weight: 500; }
+  .reponse > b { display: block; }
+  .reponse > div { margin-top: 2px; }
+  .reponse > b + .doux { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); }  /* « Claude réfléchit… » */
+  .reponse > b + .doux::before { content: ""; flex: none; width: 8px; height: 8px; background: hsl(var(--foreground)); animation: var(--pulse); }
+  #connexions { margin-top: -8px; padding: 0 16px 4px; font-family: var(--font-mono); }  /* 4px + les 8px de #taches = 12px */
+
+  /* Formulaires et champs : mono 14px, 40px, filet, 6px ; au focus la bordure passe à l'encre (input.tsx:25) */
+  section > form { display: grid; gap: 8px; padding: 16px; border-top: 1px solid hsl(var(--border)); }
+  input, select, textarea { display: block; width: 100%; height: 40px; padding: 0 12px;
+    border: 1px solid hsl(var(--border)); border-radius: var(--radius-md); background-color: hsl(var(--input));
+    color: hsl(var(--foreground)); font-family: var(--font-mono); font-size: 14px; line-height: 20px;
+    transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease); }
+  input::placeholder, textarea::placeholder { color: hsl(var(--muted-foreground)); opacity: 1; }
+  textarea { height: auto; min-height: 80px; padding: 8px 12px; resize: vertical; }
+  select { appearance: none; -webkit-appearance: none; padding-right: 36px; cursor: pointer;
+    background-color: hsl(var(--background)); background-image: var(--chevron);
+    background-repeat: no-repeat; background-position: right 12px center; background-size: 16px; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid transparent;
+    border-color: hsl(var(--foreground)); box-shadow: 0 0 0 1px hsl(var(--foreground)); }
+  /* Ces trois blocs portent gap:6px en style en ligne : ramené aux 8px du formulaire (gap-2 de l'appli),
+     sinon la pile de champs a deux écarts de 6px au milieu de ses 8px. Seul !important passe devant le style en ligne. */
+  .ligne, #r-fixe, #r-ia { gap: 8px !important; }
+  .ligne { flex-wrap: wrap; }
+  .ligne > * { flex: 1 1 8rem; width: auto; min-width: 0; }
+  .ligne > select { flex: none; }
+  #r-champ { flex-basis: 100%; }
+
+  /* Boutons (button.tsx) : mono, 6px, inversion des couleurs au survol en 150ms.
+     Contour encre par défaut, plein pour l'action principale, discret pour « Actualiser ». */
+  button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px;
+    padding: 0 12px; border: 1px solid hsl(var(--foreground)); border-radius: var(--radius-md);
+    background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: var(--font-mono);
+    font-size: 12px; line-height: 16px; letter-spacing: .025em; white-space: nowrap; cursor: pointer;
+    transition: color 150ms var(--ease), background-color 150ms var(--ease), border-color 150ms var(--ease); }
+  button:hover { background: hsl(var(--foreground)); color: hsl(var(--background)); }
+  .ok, .principal { border-color: hsl(var(--primary)); background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+  .ok:hover, .principal:hover { background: hsl(var(--background)); color: hsl(var(--primary)); }
+  .discret { height: 28px; padding: 0 8px; border-color: transparent; background: transparent; color: hsl(var(--muted-foreground)); }
+  .discret:hover { background: hsl(var(--accent)); color: hsl(var(--foreground)); }
+  section > .discret { display: flex; width: max-content; margin: 0 8px 10px; }
+  section > form > button { justify-self: start; height: 40px; padding: 0 16px; font-size: 14px; line-height: 20px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -43,13 +216,13 @@
 </header>
 <main>
   <div>
-    <section><h2>Actions à valider</h2><div id="attente"><p class="doux">Rien en attente.</p></div></section>
-    <section style="margin-top:16px"><h2>Historique des actions</h2><div id="historique"></div></section>
+    <section><h2>Actions à valider</h2><div id="attente" class="liste"><p class="doux">Rien en attente.</p></div></section>
+    <section style="margin-top:16px"><h2>Historique des actions</h2><div id="historique" class="liste"></div></section>
     <section style="margin-top:16px">
       <h2>Ce qu'on peut automatiser</h2>
       <div id="connexions" class="doux"></div>
-      <div id="taches" style="margin-top:8px"></div>
-      <button style="margin-top:6px" onclick="chargerAutomatisables()">Actualiser</button>
+      <div id="taches" class="liste" style="margin-top:8px"></div>
+      <button class="discret" style="margin-top:6px" onclick="chargerAutomatisables()">Actualiser</button>
     </section>
   </div>
   <div>
@@ -58,7 +231,7 @@
       <div id="ecoute">Je vous écoute…</div>
       <div id="transcription" class="doux">L'assistant dort hors visio.</div>
       <form id="form-question"><input id="question" placeholder="Question tapée (pendant une visio)" autocomplete="off" /></form>
-      <div id="reponses"></div>
+      <div id="reponses" class="liste"></div>
     </section>
     <section style="margin-top:16px">
       <h2>Simuler un événement</h2>
@@ -73,11 +246,11 @@
       <h2>Créer une règle</h2>
       <form id="form-regle">
         <input id="r-nom" placeholder="Nom de la règle" required />
-        <div style="display:flex;gap:6px">
+        <div class="ligne" style="display:flex;gap:6px">
           <select id="r-source"><option>web</option><option>mail</option><option>webhook</option><option>screenpipe</option><option>appel</option></select>
           <input id="r-type" placeholder="type d'événement" required />
         </div>
-        <div style="display:flex;gap:6px">
+        <div class="ligne" style="display:flex;gap:6px">
           <input id="r-champ" placeholder="si : champ (facultatif)" />
           <select id="r-op"><option value="egal">=</option><option value="contient">contient</option><option value="superieur">&gt;</option><option value="inferieur">&lt;</option></select>
           <input id="r-valeur" placeholder="valeur" />
@@ -92,13 +265,13 @@
           <input id="r-permises" value="notifier" placeholder="actions permises (séparées par une virgule)" />
         </div>
         <select id="r-validation"><option value="demander">validation demandée</option><option value="auto">auto</option></select>
-        <button type="submit">Créer</button>
+        <button class="principal" type="submit">Créer</button>
       </form>
     </section>
   </div>
   <div>
-    <section><h2>Règles</h2><div id="regles"></div></section>
-    <section style="margin-top:16px"><h2>Journal</h2><div id="journal"></div></section>
+    <section><h2>Règles</h2><div id="regles" class="liste"></div></section>
+    <section style="margin-top:16px"><h2>Journal</h2><div id="journal" class="liste"></div></section>
   </div>
 </main>
 <script>
@@ -139,10 +312,10 @@ function rendreActions() {
   $("attente").innerHTML = attente.length ? attente.map((a) => `
     <div class="item"><b>${esc(a.nom)}</b> <code>${esc(JSON.stringify(a.params))}</code>
       ${a.preuve ? `<div class="doux">Preuve : ${esc(a.preuve)}</div>` : ""}
-      <div style="margin-top:6px"><button class="ok" onclick="agir('${a.id}','valider')">Valider</button>
+      <div class="actions" style="margin-top:6px"><button class="ok" onclick="agir('${a.id}','valider')">Valider</button>
       <button class="ko" onclick="agir('${a.id}','refuser')">Refuser</button></div></div>`).join("") : '<p class="doux">Rien en attente.</p>';
   $("historique").innerHTML = toutes.filter((a) => a.statut !== "proposee").slice(0, 30).map((a) =>
-    `<div class="item"><span class="${a.statut}">${esc(a.statut)}</span> · <b>${esc(a.nom)}</b> <span class="doux">${esc(a.erreur ?? "")}</span></div>`).join("");
+    `<div class="item"><span class="statut ${a.statut}">${esc(a.statut)}</span> · <b>${esc(a.nom)}</b> <span class="doux">${esc(a.erreur ?? "")}</span></div>`).join("");
 }
 
 function rendreJournal() {
@@ -231,7 +404,7 @@ async function chargerAutomatisables() {
     $("taches").innerHTML = tachesB.map((t, i) => `
       <div class="item"><b>${esc(t.nom)}</b> <span class="doux">${(t.applis ?? []).map(esc).join(", ")}</span>
         ${(t.preuves ?? []).slice(0, 2).map((p) => `<div class="doux">${esc(String(p.date).slice(0, 10))} — « ${esc(String(p.extrait).slice(0, 100))} »</div>`).join("")}
-        <div style="margin-top:6px"><button onclick="creerRegle(${i})">Créer la règle</button></div></div>`).join("") ||
+        <div class="actions" style="margin-top:6px"><button onclick="creerRegle(${i})">Créer la règle</button></div></div>`).join("") ||
       '<p class="doux">Aucune tâche détectée pour l\'instant.</p>';
   } catch {
     $("connexions").textContent = "connexions indisponibles";
