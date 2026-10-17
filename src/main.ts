@@ -6,6 +6,7 @@ import { Copilote } from "./copilote";
 import { Moteur } from "./moteur";
 import { ecouterEvenements, screenpipe } from "./screenpipe";
 import { demarrerServeur } from "./serveur";
+import { surveillerMails, type SourceMail } from "./sources/mail";
 import { surveillerPage, type SourceWeb } from "./sources/web";
 
 /** Événements screenpipe transmis au moteur de règles (les autres ne servent qu'au copilote). */
@@ -24,11 +25,12 @@ console.log(`des-que : http://127.0.0.1:${serveur.port}`);
 const manques = verifierConfig();
 if (manques.length) moteur.journaliser("alerte", `.env incomplet : ${manques.join(", ")}`);
 
-// Sources web déclarées dans sources.json (voir sources.exemple.json).
+// Sources déclarées dans sources.json (voir sources.exemple.json).
 const fichierSources = Bun.file(config.fichierSources);
 if (await fichierSources.exists()) {
-  for (const s of (await fichierSources.json()) as SourceWeb[]) {
+  for (const s of (await fichierSources.json()) as (SourceWeb | SourceMail)[]) {
     if (s.type === "web") surveillerPage(s, moteur);
+    if (s.type === "mail") surveillerMails(s, moteur);
   }
 }
 
@@ -57,4 +59,3 @@ if (config.screenpipeCle) {
   );
 }
 
-// TODO Dev 1 : source « mail » (GET /connections/imap/messages, à sonder ; voir docs/SCREENPIPE.md)

@@ -5,5 +5,10 @@
     "url": "http://127.0.0.1:4310/",
     "motif": "Prix\\s*:\\s*([\\d.,]+)",
     "intervalleSecondes": 5
+  },
+  {
+    "type": "mail",
+    "mailbox": "des-que",
+    "intervalleSecondes": 15
   }
 ]

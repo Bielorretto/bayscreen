@@ -17,11 +17,23 @@ const page = () => `<!doctype html>
   </form>
 </body></html>`;
 
+// Document fictif à afficher avant la démo du mail : screenpipe le voit, Claude pourra le citer.
+const devis = `<!doctype html>
+<html lang="fr"><meta charset="utf-8"><title>Devis n° 42</title>
+<body style="font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem">
+  <h1>Devis n° 42</h1>
+  <p>Client : Camille (exemple fictif)</p>
+  <p>10 casques audio sans fil × 129 €</p>
+  <p style="font-size: 1.5rem">Total : 1 290 € TTC</p>
+  <p>Valable jusqu'au 31 octobre 2026</p>
+</body></html>`;
+
 Bun.serve({
   port: PORT,
   hostname: "127.0.0.1",
   async fetch(req) {
     const url = new URL(req.url);
+    if (url.pathname === "/devis/42") return new Response(devis, { headers: { "Content-Type": "text/html; charset=utf-8" } });
     if (req.method === "POST" && url.pathname === "/prix") {
       const n = Number((await req.formData()).get("prix"));
       if (!Number.isFinite(n) || n < 0) return new Response("prix invalide", { status: 400 });
