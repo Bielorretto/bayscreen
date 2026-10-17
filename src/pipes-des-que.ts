@@ -870,6 +870,28 @@ async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
       ...(source && r.lecture ? [lectureSource(source, r.lecture)] : []),
       `Envoyé au modèle de la pipe à chaque lancement : ${transmis(r.regle!)}. Jamais le texte d'un mail, d'une page ou d'une transcription.`,
     ].join("\n");
+    // Règle produit (décision de Diouf, 17/10) : une pipe qu'il vient de créer dans screenpipe
+    // se branche seule — sa phrase dans le chat vaut validation. Seul un déclencheur modifié
+    // après coup redemande un geste (la proposition ci-dessous, à valider depuis screenpipe).
+    if (v === undefined) {
+      try {
+        await executeurs["pipe.brancher"]!(
+          {
+            text: `Brancher la pipe « ${titre} » : ${resumeRegle(r.regle!, r.lecture)}`,
+            pipe: nom,
+            declencheur: texte,
+            empreinteConsigne: empreinteConsigne(consigne),
+            regle: r.regle,
+          },
+          moteur,
+        );
+        etats.set(nom, { declencheur: texte, statut: "branchee", regle: resumeRegle(r.regle!, r.lecture) });
+        moteur.journaliser("info", `pipe « ${nom} » branchée automatiquement : créée dans screenpipe, la phrase vaut validation`);
+        continue;
+      } catch (e: any) {
+        moteur.journaliser("alerte", `pipe « ${nom} » : branchement automatique refusé (${e.message}) : passage en validation`);
+      }
+    }
     const action = moteur.creerAction({
       nom: "pipe.brancher",
       params: { text: `Brancher la pipe « ${titre} » : ${resumeRegle(r.regle!, r.lecture)}`, pipe: nom, declencheur: texte, empreinteConsigne: empreinteConsigne(consigne), regle: r.regle },
