@@ -274,7 +274,12 @@ async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
     const cfg = p.config ?? {};
     const nom = String(cfg.name ?? "");
     const texte = texteDeclencheur(cfg.trigger?.custom);
-    if (!nom || !texte || cfg.enabled === false) continue;
+    if (!nom || !texte) continue;
+    if (cfg.enabled === false) {
+      // Affichée sous son déclencheur dans screenpipe ; sa règle, s'il y en a une, est arrêtée plus bas.
+      etats.set(nom, { declencheur: texte, statut: "retiree", motif: "pipe désactivée dans screenpipe" });
+      continue;
+    }
     presentes.add(nom);
     const titre = String(cfg.title ?? nom);
     const regle = moteur.regles.find((r) => r.id === idReglePipe(nom));
@@ -314,8 +319,10 @@ async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
     if (presentes.has(nom)) continue;
     desactiver(regle, "pipe retirée, désactivée ou sans déclencheur dans screenpipe");
     rapports.push({ pipe: nom, titre: nom, declencheur: "", statut: "retiree" });
-    etats.set(nom, { declencheur: "", statut: "retiree" });
+    if (etats.get(nom)?.statut !== "retiree") etats.set(nom, { declencheur: "", statut: "retiree", motif: "déclencheur retiré ou pipe supprimée dans screenpipe" });
   }
+  // Une pipe sortie de la liste est retraduite si elle revient, même avec le même texte.
+  for (const nom of traites.keys()) if (!presentes.has(nom)) traites.delete(nom);
   if (reglesChangees) await moteur.sauverRegles();
   moteur.diffuser(moteur.etat());
   return rapports;

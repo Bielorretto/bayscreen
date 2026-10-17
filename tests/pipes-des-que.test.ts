@@ -89,6 +89,20 @@ test("synchronisation : rien de branché sans validation, pas de nouvel appel si
   pipes = [];
   expect((await synchroniserAutomatiquement(moteur)).map((r) => r.statut)).toEqual(["retiree"]);
   expect(regleDe()?.active).toBe(false);
+  expect((await etatPipes(moteur))["alerte-casque"]).toMatchObject({ statut: "retiree", declencheur: "" });
+
+  // Remise avec le même texte : retraduite et reproposée, pas « déjà traitée ».
+  pipes = [{ config: { name: "alerte-casque", title: "Alerte casque", enabled: true, trigger: { custom: "dès que le casque passe sous 80 €" } } }];
+  expect((await synchroniserAutomatiquement(moteur))[0]!.statut).toBe("a_valider");
+  expect(appelsClaude).toBe(3);
+
+  // Pipe désactivée : règle arrêtée, état « retirée » affiché sous son texte.
+  await moteur.valider(aValider()[0]!.id);
+  expect(regleDe()?.active).toBe(true);
+  pipes[0]!.config.enabled = false;
+  await synchroniserAutomatiquement(moteur);
+  expect(regleDe()?.active).toBe(false);
+  expect((await etatPipes(moteur))["alerte-casque"]).toEqual({ declencheur: "dès que le casque passe sous 80 €", statut: "retiree", motif: "pipe désactivée dans screenpipe" });
 });
 
 test("refus mémorisé : un déclencheur impossible n'est traduit qu'une fois", async () => {
