@@ -64,6 +64,15 @@ describe("Moteur", () => {
     expect(a!.statut).toBe("executee");
   });
 
+  test("anti-boucle : un événement screenpipe émis par des-que ne déclenche rien", async () => {
+    const m = new Moteur("/dev/null");
+    m.regles = [{ ...regleSeuil, desQue: { source: "screenpipe", type: "*" } }];
+    await m.emettre({ ...evt({ nom: "x", valeur: 1 }), source: "screenpipe", origine: "des-que" });
+    expect(m.actions.size).toBe(0);
+    await m.emettre({ ...evt({ nom: "x", valeur: 1 }), source: "screenpipe" });
+    expect(m.actions.size).toBe(1);
+  });
+
   test("exécuteur inconnu : l'action passe en échec sans faire tomber le moteur", async () => {
     const m = new Moteur("/dev/null");
     m.regles = [{ ...regleSeuil, alors: { mode: "fixe", action: "nimporte.quoi", params: {} } }];
