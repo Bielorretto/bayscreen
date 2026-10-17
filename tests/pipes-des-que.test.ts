@@ -1,9 +1,9 @@
-import { expect, mock, spyOn, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { expect, mock, setSystemTime, spyOn, test } from "bun:test";
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { Extraction } from "../src/pipes-des-que";
-import type { Bus, Evenement, Regle } from "../src/types";
+import type { Bus, Condition, Evenement, Regle } from "../src/types";
 
 const dossier = mkdtempSync(join(tmpdir(), "des-que-pipes-"));
 process.env.FICHIER_PIPES_DES_QUE = join(dossier, "valides.json");
@@ -58,6 +58,9 @@ mock.module("../src/screenpipe", () => ({
 const notifications: Record<string, unknown>[] = [];
 /** Vrai : le panneau de notifications de screenpipe ne répond pas (503). */
 let panneauFerme = false;
+/** Réponses des pages et API que lisent les sources web (adresse → réponse), et requêtes reçues, dans l'ordre. */
+const pages = new Map<string, () => Response>();
+const lectures: { url: string; init?: RequestInit }[] = [];
 // Filet : une requête qui échapperait aux simulations échoue ici au lieu de partir vers screenpipe ou Claude. Jamais retiré
 // (pas de mockRestore) : un suivi encore en vie après ce fichier, si un garde-fou régresse, ne joint pas le vrai screenpipe.
 spyOn(globalThis, "fetch").mockImplementation((async (url: unknown, init?: RequestInit) => {
@@ -66,6 +69,11 @@ spyOn(globalThis, "fetch").mockImplementation((async (url: unknown, init?: Reque
     notifications.push(JSON.parse(String(init?.body)));
     return new Response("{}");
   }
+  const page = pages.get(String(url));
+  if (page) {
+    lectures.push({ url: String(url), init });
+    return page();
+  }
   throw new Error(`réseau coupé pendant les tests : ${String(url)}`);
 }) as any);
 
@@ -73,7 +81,18 @@ const { config } = await import("../src/config");
 const { Moteur } = await import("../src/moteur");
 const { executeurs, suivi } = await import("../src/actions");
 suivi.pasMs = 1; // chaque suivi lancé ici finit dans le test qui l'a lancé
-const { rejouerEssais, verifierAcces, synchroniserAutomatiquement, idReglePipe, etatPipes, verifierExtraction, empreinteConsigne } = await import("../src/pipes-des-que");
+const { rejouerEssais, verifierAcces, synchroniserAutomatiquement, idReglePipe, etatPipes, verifierExtraction, empreinteConsigne, verifierSource } = await import("../src/pipes-des-que");
+// DNS simulé : la résolution de la garde d'adresse (sources/web.ts) est remplacée pour tout le fichier ; aucune requête DNS ne part.
+const { resolution } = await import("../src/sources/web");
+/** Résolution simulée : nom → adresses ; absent : introuvable (ENOTFOUND). */
+const dnsSimule = new Map<string, string[]>();
+const resolus: string[] = [];
+resolution.adresses = async (nom: string) => {
+  resolus.push(nom);
+  const a = dnsSimule.get(nom);
+  if (!a) throw Object.assign(new Error(`getaddrinfo ENOTFOUND ${nom}`), { code: "ENOTFOUND" });
+  return a;
+};
 
 config.fichierSources = join(dossier, "sources.json");
 await Bun.write(config.fichierSources, JSON.stringify([{ type: "web", nom: "Casque audio", url: "http://127.0.0.1:4310/" }, { type: "mail", mailbox: "Commandes" }]));
@@ -1219,4 +1238,349 @@ test("compatibilité : une pipe validée avant le lot 6 reste branchée ; sans s
     `{"texte":"${TEXTE}","desQue":{"source":"web","type":"valeur_changee","si":${si90}},"alors":${alors90}}`,
   );
   expect(JSON.stringify((await etatPipes(moteur))["compat-neuve"])).toBe(`{"declencheur":"${TEXTE}","statut":"branchee","regle":"${resume}"}`);
+});
+
+// ── Source créée par le pont : un « dès que » sur une valeur publique qu'aucune source ne surveille. ──
+// Adresses fictives (.example) ; DNS et réponses simulés. 93.184.216.34, l'adresse IANA des domaines d'exemple, tient lieu
+// d'adresse publique : aucune connexion n'y est faite.
+const BITCOIN = "dès que le bitcoin dépasse 50 000 €";
+const IP_PUBLIQUE = "93.184.216.34";
+const URL_BTC = "https://api.cours-demo.example/v1/prix?actif=bitcoin&devise=eur";
+dnsSimule.set("api.cours-demo.example", [IP_PUBLIQUE]);
+pages.set(URL_BTC, () => new Response('{"bitcoin":{"eur":51234.5}}', { headers: { "Content-Type": "application/json" } }));
+const sourceBtc = { nom: "Bitcoin", url: URL_BTC, motif: '"eur":\\s*([\\d.]+)', intervalleSecondes: 60 };
+const traductionBtc = (source: unknown = sourceBtc, nom = "Bitcoin") => ({
+  possible: true,
+  evenement: "web/valeur_changee",
+  si: [{ champ: "nom", op: "egal", valeur: nom }, { champ: "valeur", op: "superieur", valeur: "50000" }],
+  extraire: [],
+  source,
+  essais: [
+    { donnees_json: JSON.stringify({ nom, valeur: 51000, ancienne: 49000 }), attendu: true, pourquoi: "dépasse 50 000" },
+    { donnees_json: JSON.stringify({ nom, valeur: 49000, ancienne: 48000 }), attendu: false, pourquoi: "reste en dessous" },
+  ],
+  motif_refus: "",
+});
+const pipeBtc = (name: string) => ({ config: { name, title: "Alerte bitcoin", enabled: true, trigger: { custom: BITCOIN } } });
+/** Sources déclarées à la main : celle de la démo (127.0.0.1:4310, non marquée) et un dossier IMAP. */
+const SOURCES_MAIN = [
+  { type: "web", nom: "Casque audio", url: "http://127.0.0.1:4310/", motif: "Prix\\s*:\\s*([\\d.,]+)", intervalleSecondes: 5 },
+  { type: "mail", mailbox: "Commandes" },
+];
+/** Fait tourner f avec un fichier des sources à lui (SOURCES_MAIN au départ), puis rend aux autres tests le leur. */
+async function avecSources(f: (fichier: string) => Promise<void>) {
+  const avant = config.fichierSources;
+  config.fichierSources = join(dossier, `sources-${crypto.randomUUID().slice(0, 8)}.json`);
+  writeFileSync(config.fichierSources, JSON.stringify(SOURCES_MAIN, null, 2) + "\n");
+  try {
+    await f(config.fichierSources);
+  } finally {
+    config.fichierSources = avant;
+  }
+}
+const btcChange = (valeur: number, ancienne: string): Evenement => ({
+  id: crypto.randomUUID(),
+  source: "web",
+  type: "valeur_changee",
+  date: new Date().toISOString(),
+  donnees: { nom: "Bitcoin", url: URL_BTC, valeur, valeurTexte: String(valeur), ancienne },
+});
+const releveInitial = (moteur: InstanceType<typeof Moteur>) => moteur.journal.some((l) => l.message === "source « Bitcoin » : valeur initiale 51234.5");
+
+test("source proposée (fonction pure) : nom de 1 à 60 caractères, intervalle ramené entre 30 et 3 600 s (60 par défaut), visée par la règle ; absente ou vide, aucune", () => {
+  const vise = (nom: string): Regle["desQue"] => ({ source: "web", type: "valeur_changee", si: [{ champ: "nom", op: "egal", valeur: nom }] });
+  const avec = (modif: Record<string, unknown>, nom = "Bitcoin") => verifierSource({ ...sourceBtc, ...modif }, vise(nom));
+  expect(avec({})).toEqual({ ok: true, source: sourceBtc });
+  for (const [donne, retenu] of [[5, 30], [29.6, 30], [45.4, 45], [86_400, 3600], [null, 60], ["90", 60], [Number.NaN, 60]] as const) {
+    expect({ donne, r: avec({ intervalleSecondes: donne }) }).toEqual({ donne, r: { ok: true, source: { ...sourceBtc, intervalleSecondes: retenu } } });
+  }
+  expect(avec({ nom: "B".repeat(60) }, "B".repeat(60)).ok).toBe(true);
+  expect(avec({ nom: "B".repeat(61) }, "B".repeat(61))).toEqual({ ok: false, motif: "nom de 1 à 60 caractères, sans espace autour, ni {{ }} ni caractère de contrôle" });
+  for (const nom of ["", " Bitcoin", "Bit\ncoin", "{{nom}}"]) expect({ nom, ok: avec({ nom }, nom).ok }).toEqual({ nom, ok: false });
+  // Clés remises dans l'ordre : c'est cette source-là qui entre dans la règle, et que le branchement compare.
+  const { nom, ...reste } = sourceBtc;
+  const remise = verifierSource({ ...reste, nom }, vise("Bitcoin"));
+  expect(remise.ok && JSON.stringify(remise.source)).toBe(JSON.stringify(sourceBtc));
+  // Absente ou vide : aucune source.
+  for (const vide of [undefined, null, { nom: "", url: "", motif: "", intervalleSecondes: 0 }]) expect(verifierSource(vide, vise("Bitcoin"))).toEqual({ ok: true });
+  // Visée par la règle (web/valeur_changee, nom egal <son nom>), sinon refusée.
+  expect(avec({}, "Ethereum")).toEqual({ ok: false, motif: "la règle doit la viser : web/valeur_changee et nom egal « Bitcoin »" });
+  expect(verifierSource(sourceBtc, { source: "mail", type: "mail_recu" }).ok).toBe(false);
+  expect(verifierSource("Bitcoin", vise("Bitcoin")).ok).toBe(false);
+});
+
+test("source à créer : lue une fois avant de proposer ; proposition, preuve et état montrent la source et la valeur lue avec son heure ; rien n'est écrit ni relevé avant Valider", async () => {
+  await avecSources(async (fichier) => {
+    const moteur = new Moteur(join(dossier, "regles-btc-proposee.json"));
+    const avant = readFileSync(fichier, "utf8");
+    traduction = traductionBtc();
+    pipes = [pipeBtc("btc-proposee")];
+    lectures.length = 0;
+    const LUE = new Date("2026-10-17T08:02:03.000Z");
+    setSystemTime(LUE);
+    try {
+      expect((await synchroniserAutomatiquement(moteur))[0]!.statut).toBe("a_valider");
+    } finally {
+      setSystemTime();
+    }
+    // Claude : une source web à proposer, ou null ; quand et comment, dit dans la consigne.
+    const schema = demandeClaude.schema as any;
+    expect(schema.required).toContain("source");
+    expect(schema.properties.source.anyOf).toEqual([
+      { type: "object", properties: expect.any(Object), required: ["nom", "url", "motif", "intervalleSecondes"], additionalProperties: false },
+      { type: "null" },
+    ]);
+    expect(demandeClaude.systeme).toContain("qu'aucune source surveillée ne couvre");
+    expect(demandeClaude.systeme).toContain("API publique sans clé qui renvoie du JSON");
+    expect(demandeClaude.systeme).toContain("premier groupe capture le nombre");
+    // Lue une fois, sans suivre de redirection.
+    expect(lectures.map((l) => [l.url, l.init?.redirect])).toEqual([[URL_BTC, "manual"]]);
+    const a = proposee(moteur, "btc-proposee")!;
+    const regleBtc = a.params.regle as Regle;
+    expect(regleBtc.alors).toEqual({ mode: "fixe", action: "pipe.lancer", params: { pipe: "btc-proposee", evenement: { valeur: "{{valeur}}", ancienne: "{{ancienne}}" }, source: sourceBtc } });
+    const heure = LUE.toLocaleString("fr-FR");
+    const resume =
+      "dès que web/valeur_changee si nom egal Bitcoin et valeur superieur 50000 → lancer la pipe, en envoyant à son modèle le déclencheur et " +
+      `les nombres valeur, ancienne de l'événement ; source web « Bitcoin » créée au clic sur Valider : ${URL_BTC}, motif « "eur":\\s*([\\d.]+) », ` +
+      `relevée toutes les 60 s ; valeur lue 51234.5 le ${heure}`;
+    expect(a.params.text).toBe(`Brancher la pipe « Alerte bitcoin » : ${resume}`);
+    expect((await etatPipes(moteur))["btc-proposee"]).toMatchObject({ statut: "a_valider", regle: resume });
+    expect(a.preuve).toContain("source web OK (« Bitcoin » à créer au clic sur Valider, lue une fois : 51234.5)");
+    expect(a.preuve).toContain(
+      `Source à créer au clic sur Valider, pas avant : ajoutée à ${fichier} (origine « pont »), puis relevée toutes les 60 s. ` +
+        `Lue une fois pour cette proposition, le ${heure} : 51234.5. Chaque lecture repasse la garde d'adresse (DNS compris), ` +
+        "sans suivre de redirection, en 10 s et 512 Ko au plus.",
+    );
+    // Contrôle d'accès : la source proposée tient lieu de source surveillée si elle a passé la garde et la lecture.
+    const sourceWeb = async (lecture?: { valeur: number; le: string }) => (await verifierAcces(regleBtc, {}, lecture)).find((x) => x.acces === "source web");
+    expect(await sourceWeb()).toMatchObject({ ok: false, detail: expect.stringContaining("« Bitcoin » absente de") });
+    expect(await sourceWeb({ valeur: 51234.5, le: LUE.toISOString() })).toEqual({ acces: "source web", ok: true, detail: "« Bitcoin » à créer au clic sur Valider, lue une fois : 51234.5" });
+    // Rien d'écrit, de relevé ni d'armé avant le clic.
+    await Bun.sleep(20);
+    expect(readFileSync(fichier, "utf8")).toBe(avant);
+    expect(lectures).toHaveLength(1);
+    expect(moteur.regles).toEqual([]);
+  });
+});
+
+test("Valider : garde revérifiée (DNS compris), source ajoutée d'un seul geste au fichier des sources, marquée « pont », relevée tout de suite, puis règle armée", async () => {
+  await avecSources(async (fichier) => {
+    const moteur = new Moteur(join(dossier, "regles-btc-validee.json"));
+    traduction = traductionBtc();
+    pipes = [pipeBtc("btc-validee")];
+    await synchroniserAutomatiquement(moteur);
+    const id = proposee(moteur, "btc-validee")!.id;
+    lectures.length = 0;
+    resolus.length = 0;
+    const inode = statSync(fichier).ino;
+    await moteur.valider(id);
+    expect(moteur.actions.get(id)?.statut).toBe("executee");
+    expect(resolus[0]).toBe("api.cours-demo.example"); // la garde, au clic, avant d'écrire
+    expect(await Bun.file(fichier).json()).toEqual([...SOURCES_MAIN, { type: "web", ...sourceBtc, origine: "pont" }]);
+    // Écrite à côté, puis renommée : un autre fichier (inode) a pris la place, et aucun fichier temporaire ne reste.
+    expect(statSync(fichier).ino).not.toBe(inode);
+    expect(readdirSync(dossier).filter((f) => f.startsWith(`${basename(fichier)}.`))).toEqual([]);
+    expect(moteur.journal.map((l) => l.message)).toContain(`source « Bitcoin » ajoutée à ${fichier} (origine pont), relevée toutes les 60 s`);
+    // Relevée tout de suite, en mode strict : garde à chaque relevé, sans redirection.
+    await attendre(() => releveInitial(moteur));
+    expect(lectures.map((l) => [l.url, l.init?.redirect])).toEqual([[URL_BTC, "manual"]]);
+    expect(resolus).toEqual(["api.cours-demo.example", "api.cours-demo.example"]);
+    // Règle armée et validée, source comprise.
+    expect(moteur.regles.find((r) => r.id === idReglePipe("btc-validee"))).toMatchObject({ active: true, alors: { params: { source: sourceBtc } } });
+    expect((await Bun.file(process.env.FICHIER_PIPES_DES_QUE!).json())["btc-validee"]).toMatchObject({ texte: BITCOIN, alors: { params: { source: sourceBtc } } });
+    expect((await etatPipes(moteur))["btc-validee"]).toMatchObject({ statut: "branchee", regle: expect.stringContaining(`; source web « Bitcoin » créée au clic sur Valider : ${URL_BTC}`) });
+    // La valeur passe 52 000 : la pipe part, avec des nombres seulement.
+    envois.length = 0;
+    await moteur.emettre(btcChange(52000, "51234.5"));
+    expect(envois.map((e) => JSON.parse(e.corps))).toEqual([{ run_context: { source: "des-que", condition: BITCOIN, evenement: { valeur: 52000, ancienne: 51234.5 }, consigne: CONSIGNE } }]);
+  });
+});
+
+test("Valider : un nom qui se résout désormais vers 10.x (DNS rebinding entre la proposition et le clic) ne branche rien et n'écrit rien", async () => {
+  await avecSources(async (fichier) => {
+    const moteur = new Moteur(join(dossier, "regles-btc-bascule.json"));
+    const url = "https://bascule.cours-demo.example/prix";
+    dnsSimule.set("bascule.cours-demo.example", [IP_PUBLIQUE]);
+    pages.set(url, () => new Response('{"bitcoin":{"eur":51234.5}}'));
+    traduction = traductionBtc({ ...sourceBtc, url });
+    pipes = [pipeBtc("btc-bascule")];
+    await synchroniserAutomatiquement(moteur);
+    const id = proposee(moteur, "btc-bascule")!.id;
+    const avant = readFileSync(fichier, "utf8");
+    dnsSimule.set("bascule.cours-demo.example", ["10.0.0.7"]);
+    lectures.length = 0;
+    await moteur.valider(id);
+    expect(moteur.actions.get(id)).toMatchObject({
+      statut: "echec",
+      erreur: "source « Bitcoin » : adresse refusée (« bascule.cours-demo.example » se résout vers 10.0.0.7, adresse privée) : rien n'est branché",
+    });
+    await Bun.sleep(20);
+    expect(readFileSync(fichier, "utf8")).toBe(avant);
+    expect(lectures).toEqual([]);
+    expect(moteur.regles.find((r) => r.id === idReglePipe("btc-bascule"))).toBeUndefined();
+  });
+});
+
+test("traduction : adresse refusée (dont un nom qui se résout vers 127.0.0.1 ou 10.x), redirection, réponse trop longue, page injoignable, mauvais motif → rien n'est proposé, « À débloquer d'abord : »", async () => {
+  await avecSources(async (fichier) => {
+    const moteur = new Moteur(join(dossier, "regles-btc-refus.json"));
+    const avant = readFileSync(fichier, "utf8");
+    dnsSimule.set("boucle.piege.example", ["127.0.0.1"]);
+    dnsSimule.set("interne.piege.example", [IP_PUBLIQUE, "10.0.0.7"]);
+    const api = "https://api.cours-demo.example";
+    pages.set(`${api}/redirige`, () => new Response(null, { status: 302, headers: { Location: "http://127.0.0.1:4300/api/etat" } }));
+    pages.set(`${api}/longue`, () => new Response(`${" ".repeat(600 * 1024)}{"bitcoin":{"eur":51234.5}}`));
+    pages.set(`${api}/panne`, () => new Response("indisponible", { status: 503 }));
+    // [ce qui change dans la source proposée, raison attendue, lectures faites]
+    const cas: [Record<string, unknown>, string, number][] = [
+      [{ url: "https://boucle.piege.example/prix" }, "adresse refusée : « boucle.piege.example » se résout vers 127.0.0.1, adresse de bouclage", 0],
+      [{ url: "https://interne.piege.example/prix" }, "adresse refusée : « interne.piege.example » se résout vers 10.0.0.7, adresse privée", 0],
+      [{ url: "https://inconnu.piege.example/prix" }, "adresse refusée : nom « inconnu.piege.example » introuvable (DNS : ENOTFOUND)", 0],
+      [{ url: "http://127.0.0.1:4310/" }, "adresse refusée : adresse IP de bouclage : 127.0.0.1", 0],
+      [{ url: "http://[::ffff:127.0.0.1]/prix" }, "adresse refusée : adresse IP de bouclage : [::ffff:7f00:1]", 0],
+      [{ url: `${api}/redirige` }, "redirection refusée (HTTP 302)", 1],
+      [{ url: `${api}/longue` }, "motif introuvable dans la réponse (512 premiers Ko lus au plus)", 1],
+      [{ url: `${api}/panne` }, "page injoignable (HTTP 503)", 1],
+      [{ motif: '"eur":\\s*[\\d.]+' }, "motif refusé : sans groupe qui capture le nombre", 0],
+      [{ motif: '"eur":\\s*((\\d+)+)' }, "motif refusé : quantificateurs imbriqués, comme (a+)+", 0],
+      [{ motif: `([\\d.]+)${"x".repeat(193)}` }, "motif refusé : de 1 à 200 caractères, ni {{ }} ni caractère de contrôle", 0],
+      [{ motif: '"eur":\\s*([\\d.]+' }, "motif refusé : expression régulière illisible", 0],
+      [{ motif: '"(\\w+)":\\{' }, "le premier groupe du motif ne capture pas un nombre", 1],
+    ];
+    for (const [i, [modif, raison, n]] of cas.entries()) {
+      const pipe = `btc-refus-${i}`;
+      traduction = traductionBtc({ ...sourceBtc, ...modif });
+      pipes = [pipeBtc(pipe)];
+      lectures.length = 0;
+      const motif =
+        `À débloquer d'abord : source web : « Bitcoin » à créer, refusée : ${raison}. Pour la relever quand même, déclarez-la à la main ` +
+        `dans ${fichier} (type web, nom, url, motif dont le premier groupe capture le nombre), puis relancez le moteur`;
+      expect({ pipe, rapport: (await synchroniserAutomatiquement(moteur))[0] }).toMatchObject({ pipe, rapport: { statut: "refusee", motif } });
+      expect({ pipe, lectures: lectures.length }).toEqual({ pipe, lectures: n });
+      expect(proposee(moteur, pipe)).toBeUndefined();
+      expect((await etatPipes(moteur))[pipe]).toMatchObject({ statut: "refusee", motif });
+    }
+    expect(moteur.journal.map((l) => l.message)).toContain(
+      `pipe « btc-refus-0 » non branchée : À débloquer d'abord : source web : « Bitcoin » à créer, refusée : ${cas[0]![1]}. Pour la relever quand même, ` +
+        `déclarez-la à la main dans ${fichier} (type web, nom, url, motif dont le premier groupe capture le nombre), puis relancez le moteur`,
+    );
+    expect(readFileSync(fichier, "utf8")).toBe(avant);
+    expect(moteur.regles).toEqual([]);
+  });
+});
+
+test("Valider : une source identique déjà là n'est ni dupliquée ni relevée deux fois ; même nom, autre adresse ou autre motif : rien n'est branché ni écrit", async () => {
+  await avecSources(async (fichier) => {
+    const moteur = new Moteur(join(dossier, "regles-btc-double.json"));
+    traduction = traductionBtc();
+    pipes = [pipeBtc("btc-double-a"), pipeBtc("btc-double-b")];
+    await synchroniserAutomatiquement(moteur); // deux propositions, chacune avec la même source à créer
+    await moteur.valider(proposee(moteur, "btc-double-a")!.id);
+    await attendre(() => releveInitial(moteur));
+    const apresA = readFileSync(fichier, "utf8");
+    lectures.length = 0;
+    const b = proposee(moteur, "btc-double-b")!.id;
+    await moteur.valider(b);
+    expect(moteur.actions.get(b)?.statut).toBe("executee");
+    expect(readFileSync(fichier, "utf8")).toBe(apresA);
+    expect(moteur.journal.map((l) => l.message)).toContain(`source « Bitcoin » déjà dans ${fichier} : pas de doublon`);
+    await Bun.sleep(20);
+    expect(lectures).toEqual([]); // pas de second relevé
+    expect(["btc-double-a", "btc-double-b"].map((p) => moteur.regles.find((r) => r.id === idReglePipe(p))?.active)).toEqual([true, true]);
+    // Traduite ensuite, la même source est déjà surveillée : la règle la vise comme les autres, sans rien créer ni lire.
+    pipes = [pipeBtc("btc-double-c")];
+    await synchroniserAutomatiquement(moteur);
+    expect((proposee(moteur, "btc-double-c")!.params.regle as Regle).alors).toEqual({ mode: "fixe", action: "pipe.lancer", params: { pipe: "btc-double-c", evenement: { valeur: "{{valeur}}", ancienne: "{{ancienne}}" } } });
+    expect(lectures).toEqual([]);
+  });
+  for (const [quoi, autre] of [
+    ["adresse", { url: "https://autre.cours-demo.example/btc" }],
+    ["motif", { motif: '"eur"\\s*:\\s*([\\d.]+)' }],
+  ] as const) {
+    await avecSources(async (fichier) => {
+      const pipe = `btc-conflit-${quoi}`;
+      const moteur = new Moteur(join(dossier, `regles-${pipe}.json`));
+      traduction = traductionBtc();
+      pipes = [pipeBtc(pipe)];
+      await synchroniserAutomatiquement(moteur);
+      const id = proposee(moteur, pipe)!.id;
+      // Avant le clic, une source « Bitcoin » déclarée à la main, avec une autre adresse ou un autre motif.
+      writeFileSync(fichier, JSON.stringify([...SOURCES_MAIN, { type: "web", ...sourceBtc, ...autre }], null, 2));
+      const avant = readFileSync(fichier, "utf8");
+      lectures.length = 0;
+      await moteur.valider(id);
+      expect({ quoi, action: moteur.actions.get(id) }).toMatchObject({
+        quoi,
+        action: { statut: "echec", erreur: `une source « Bitcoin » existe déjà dans ${fichier}, avec une autre adresse ou un autre motif : rien n'est branché` },
+      });
+      await Bun.sleep(20);
+      expect(readFileSync(fichier, "utf8")).toBe(avant);
+      expect(lectures).toEqual([]);
+      expect(moteur.regles.find((r) => r.id === idReglePipe(pipe))).toBeUndefined();
+      // Reproposée à la synchronisation suivante : le conflit est dit avant toute proposition.
+      expect((await synchroniserAutomatiquement(moteur))[0]).toMatchObject({
+        statut: "refusee",
+        motif: `À débloquer d'abord : source web : « Bitcoin » existe déjà dans ${fichier}, avec une autre adresse ou un autre motif ; renommez ou retirez celle du fichier, puis relancez le moteur`,
+      });
+    });
+  }
+});
+
+test("la source fait partie de ce qui est validé : redérivée et comparée au branchement ; changée dans la règle armée, la pipe s'arrête et se revalide", async () => {
+  await avecSources(async (fichier) => {
+    const moteur = new Moteur(join(dossier, "regles-btc-forgee.json"));
+    const pipe = "btc-forgee";
+    pipes = [pipeBtc(pipe)];
+    dnsSimule.set("boucle.piege.example", ["127.0.0.1"]);
+    const desQue: Regle["desQue"] = { source: "web", type: "valeur_changee", si: traductionBtc().si as Condition[] };
+    const brancherAvec = (source: unknown, d: Regle["desQue"] = desQue) =>
+      executeurs["pipe.brancher"]!(
+        {
+          pipe,
+          declencheur: BITCOIN,
+          empreinteConsigne: empreinteConsigne(""),
+          regle: { id: idReglePipe(pipe), nom: pipe, active: false, desQue: d, alors: { mode: "fixe", action: "pipe.lancer", params: { pipe, evenement: { valeur: "{{valeur}}", ancienne: "{{ancienne}}" }, source } }, validation: "auto" },
+        },
+        moteur,
+      );
+    const avant = readFileSync(fichier, "utf8");
+    for (const source of [
+      { ...sourceBtc, intervalleSecondes: 5 }, // la redérivation donne 30
+      { ...sourceBtc, intervalleSecondes: 86_400 }, // … et 3 600
+      { nom: "Bitcoin", url: URL_BTC, motif: sourceBtc.motif }, // sans intervalle : 60
+      { ...sourceBtc, origine: "pont" }, // une clé de plus
+      { ...sourceBtc, nom: "Ethereum" }, // pas celle que vise la règle
+      { ...sourceBtc, nom: "B".repeat(61) },
+      { ...sourceBtc, url: "http://localhost:4300/api/etat" },
+      { ...sourceBtc, url: "http://169.254.169.254/latest/meta-data/" },
+      { ...sourceBtc, motif: "(a+)+" },
+      { nom: "", url: "", motif: "", intervalleSecondes: 60 }, // vide : la règle n'en porte pas
+      null,
+    ]) {
+      await expect(brancherAvec(source)).rejects.toThrow("règle de pipe invalide");
+    }
+    await expect(brancherAvec(sourceBtc, { source: "mail", type: "mail_recu" })).rejects.toThrow("règle de pipe invalide");
+    await expect(brancherAvec({ ...sourceBtc, url: "https://boucle.piege.example/prix" })).rejects.toThrow(
+      "source « Bitcoin » : adresse refusée (« boucle.piege.example » se résout vers 127.0.0.1, adresse de bouclage) : rien n'est branché",
+    );
+    expect(readFileSync(fichier, "utf8")).toBe(avant);
+    expect(moteur.regles).toEqual([]);
+    expect(await brancherAvec(sourceBtc)).toEqual({ branchee: idReglePipe(pipe) });
+    await attendre(() => releveInitial(moteur));
+
+    // La source de la règle armée change (regles.json modifié à la main) : ce n'est plus la règle validée.
+    const autre = { ...sourceBtc, url: "https://autre.cours-demo.example/btc" };
+    moteur.regles = moteur.regles.map((r) => (r.id === idReglePipe(pipe) && r.alors.mode === "fixe" ? { ...r, alors: { ...r.alors, params: { ...r.alors.params, source: autre } } } : r));
+    envois.length = 0;
+    await moteur.emettre(btcChange(52000, "51234.5"));
+    expect(envois).toEqual([]);
+    expect(lancement(moteur)).toMatchObject({ statut: "echec", erreur: "règle différente de celle validée : non lancée" });
+    expect(moteur.regles.find((r) => r.id === idReglePipe(pipe))?.active).toBe(false);
+    // Revalidation : la pipe est retraduite et reproposée ; rien n'est armé avant un nouveau clic.
+    traduction = traductionBtc();
+    const avantClaude = appelsClaude;
+    expect((await synchroniserAutomatiquement(moteur)).map((r) => [r.pipe, r.statut])).toEqual([[pipe, "a_valider"]]);
+    expect(appelsClaude).toBe(avantClaude + 1);
+    expect(moteur.regles.find((r) => r.id === idReglePipe(pipe))?.active).toBe(false);
+  });
 });
