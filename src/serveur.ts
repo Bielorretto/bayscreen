@@ -103,16 +103,9 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
 
         // Pont « dès que » : traduit les déclencheurs custom des pipes screenpipe en règles du moteur.
         if (pathname === "/api/pipes/synchroniser" && req.method === "POST") {
-          const rapports = await pipesDesQue.synchroniserPipes(moteur.regles);
-          for (const r of rapports) {
-            if (r.statut === "branchee" && r.regle) {
-              moteur.regles = [...moteur.regles.filter((x) => x.id !== r.regle!.id), r.regle];
-            }
-          }
-          if (rapports.some((r) => r.statut === "branchee")) await moteur.sauverRegles();
+          const rapports = await pipesDesQue.synchroniserAutomatiquement(moteur);
           const n = (s: string) => rapports.filter((r) => r.statut === s).length;
           moteur.journaliser("info", `pipes screenpipe : ${n("branchee")} branchée(s), ${n("deja")} déjà, ${n("refusee")} refusée(s), ${n("erreur")} erreur(s)`);
-          moteur.diffuser(moteur.etat());
           return json({ ok: true, rapports });
         }
 

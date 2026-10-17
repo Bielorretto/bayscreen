@@ -5,6 +5,7 @@
 // à l'événement via l'exécuteur pipe.lancer.
 
 import { demanderJSON } from "./claude";
+import type { Moteur } from "./moteur";
 import { sp } from "./screenpipe";
 import type { Condition, Regle } from "./types";
 
@@ -138,7 +139,7 @@ export async function synchroniserPipes(reglesExistantes: Regle[]): Promise<Rapp
   for (const p of pipes) {
     const nom = String(p.config?.name ?? "");
     if (!nom) continue;
-    const declencheur = String(p.config?.trigger?.custom ?? "").trim();
+    const declencheur = texteDeclencheur(p.config?.trigger?.custom);
     const titre = String(p.config?.title ?? nom);
     if (reglesExistantes.some((r) => r.id === idReglePipe(nom))) {
       rapports.push({ pipe: nom, titre, declencheur, statut: "deja" });
@@ -150,5 +151,30 @@ export async function synchroniserPipes(reglesExistantes: Regle[]): Promise<Rapp
     }
     rapports.push(await traduireDeclencheur(nom, titre, declencheur, String(p.config?.description ?? "")));
   }
+  return rapports;
+}
+
+/**
+ * Synchronisation complète, appliquée au moteur : c'est la fonction appelée
+ * automatiquement (surveillance périodique dans main.ts) comme par la route API.
+ * Rien ne se passe sans être journalisé : branchement, refus ou erreur.
+ */
+export async function synchroniserAutomatiquement(moteur: Moteur): Promise<RapportPipe[]> {
+  const rapports = await synchroniserPipes(moteur.regles);
+  for (const r of rapports) {
+    if (r.statut === "branchee" && r.regle) {
+      moteur.regles = [...moteur.regles.filter((x) => x.id !== r.regle!.id), r.regle];
+      moteur.journaliser(
+        "info",
+        `pipe « ${r.pipe} » branchée automatiquement : dès que ${r.regle.desQue.source}/${r.regle.desQue.type} → pipe.lancer`,
+      );
+    } else if (r.statut === "refusee") {
+      moteur.journaliser("alerte", `pipe « ${r.pipe} » non branchée : ${r.motif ?? "?"}`);
+    } else if (r.statut === "erreur") {
+      moteur.journaliser("erreur", `pipe « ${r.pipe} » : ${r.motif ?? "erreur inconnue"}`);
+    }
+  }
+  if (rapports.some((r) => r.statut === "branchee")) await moteur.sauverRegles();
+  moteur.diffuser(moteur.etat());
   return rapports;
 }

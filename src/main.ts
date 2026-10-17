@@ -4,6 +4,7 @@ import { repondre } from "./assistant";
 import { config, verifierConfig } from "./config";
 import { Copilote } from "./copilote";
 import { Moteur } from "./moteur";
+import { synchroniserAutomatiquement } from "./pipes-des-que";
 import { ecouterEvenements, screenpipe } from "./screenpipe";
 import { demarrerServeur } from "./serveur";
 import { surveillerMails, type SourceMail } from "./sources/mail";
@@ -32,6 +33,18 @@ if (await fichierSources.exists()) {
     if (s.type === "web") surveillerPage(s, moteur);
     if (s.type === "mail") surveillerMails(s, moteur);
   }
+}
+
+// Pont « dès que » : surveillance automatique des pipes screenpipe. L'utilisateur
+// crée sa pipe dans l'app avec un déclencheur « dès que » (trigger.custom) : elle est
+// traduite et branchée toute seule, sans action de personne côté moteur.
+if (config.screenpipeCle) {
+  const sonderPipes = () =>
+    synchroniserAutomatiquement(moteur).catch((e) =>
+      moteur.journaliser("alerte", `surveillance des pipes screenpipe : ${e.message}`),
+    );
+  setTimeout(sonderPipes, 10_000); // premier passage juste après le démarrage
+  setInterval(sonderPipes, 60_000); // puis au rythme du scan de screenpipe
 }
 
 if (config.screenpipeCle) {
