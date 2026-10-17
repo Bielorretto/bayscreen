@@ -105,8 +105,8 @@ export async function traduireRegle(phrase: string, demander: typeof demanderJSO
       t.mode === "ia"
         ? { mode: "ia", consigne: texte, actionsPermises: [t.action] }
         : { mode: "fixe", action: t.action, params: { [t.action === "discord.envoyer" ? "content" : "text"]: texte } },
-    // Une notification à soi part seule ; un message vers d'autres attend toujours le clic.
-    validation: t.mode === "fixe" && t.action === "notifier" ? "auto" : "demander",
+    // Décision d'équipe du 17/10 : part tout de suite ; la destination est fixée par la règle, Claude n'écrit que le texte.
+    validation: "auto",
   };
   const essais = rejouerEssais(regle, t.essais);
   if (!essais.ok) return { ok: false, motif: "les essais rejoués par le moteur ne correspondent pas à la phrase", essais: essais.lignes };

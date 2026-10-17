@@ -34,9 +34,9 @@ test("une phrase devient une règle : événement, condition, message, essais re
   expect(r.essais.every((l) => l.startsWith("OK"))).toBe(true);
 });
 
-test("un message vers d'autres (Slack) attend toujours la validation ; Discord reçoit content", async () => {
+test("un message vers d'autres (Slack) part aussi tout de suite ; Discord reçoit content", async () => {
   const slack = await traduireRegle("…", claude({ ...facture, action: "slack.envoyer" }));
-  expect(slack.ok && slack.regle.validation).toBe("demander");
+  expect(slack.ok && slack.regle.validation).toBe("auto");
   const discord = await traduireRegle("…", claude({ ...facture, action: "discord.envoyer" }));
   expect(discord.ok && discord.regle.alors).toMatchObject({ params: { content: facture.message } });
 });

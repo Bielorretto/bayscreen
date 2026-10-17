@@ -400,7 +400,7 @@ function resumer(r) {
     ? `<b>${esc(LIBELLES[r.alors.action] ?? r.alors.action)}</b> : « ${esc(r.alors.params.text ?? r.alors.params.content)} »`
     : `Claude rédige un <b>${esc(LIBELLES[r.alors.actionsPermises[0]] ?? r.alors.actionsPermises[0])}</b> : ${esc(r.alors.consigne)}`;
   return `dès que <b>${esc(r.desQue.source)}/${esc(r.desQue.type)}</b>${si ? `, si ${si}` : ""} → ${quoi}
-    <div class="doux">${r.validation === "auto" ? "part sans validation (notification à vous seul)" : "attend votre validation à chaque fois"}</div>`;
+    <div class="doux">${r.validation === "auto" ? "part tout de suite, vers la destination fixée par la règle" : "attend votre validation à chaque fois"}</div>`;
 }
 $("form-phrase").onsubmit = async (e) => {
   e.preventDefault();
@@ -431,7 +431,6 @@ $("r-mode").onchange = () => {
   const ia = $("r-mode").value === "ia";
   $("r-fixe").style.display = ia ? "none" : "grid";
   $("r-ia").style.display = ia ? "grid" : "none";
-  if (ia) $("r-validation").value = "demander"; // « ia » impose « demander »
 };
 
 $("form-regle").onsubmit = async (e) => {
@@ -450,7 +449,7 @@ $("form-regle").onsubmit = async (e) => {
     alors: mode === "fixe"
       ? { mode: "fixe", action: $("r-action").value.trim(), params }
       : { mode: "ia", consigne: $("r-consigne").value.trim(), actionsPermises: $("r-permises").value.split(",").map((s) => s.trim()).filter(Boolean) },
-    validation: mode === "ia" ? "demander" : $("r-validation").value,
+    validation: $("r-validation").value,
   };
   const r = await fetch("/api/regles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(regle) });
   if (!r.ok) return alert((await r.json()).erreur);
