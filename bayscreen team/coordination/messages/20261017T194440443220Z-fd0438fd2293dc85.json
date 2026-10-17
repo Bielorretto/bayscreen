@@ -1,0 +1,17 @@
+{
+  "id": "20261017T194440443220Z-fd0438fd2293dc85",
+  "time": "2026-10-17T19:44:40+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "newbiecae"
+  ],
+  "task_id": "UI-CORRECTIFS",
+  "branch": null,
+  "files": [
+    "screenpipe-correctif/LISEZMOI.md"
+  ],
+  "text": "Correctifs screenpipe, à savoir avant d'essayer (relecture finie) : en mode isolé, ne pas cliquer sur la pastille Event API. Elle écrit en dur dans ~/.screenpipe/pipes, donc dans les pipes de l'appli installée. En formule gratuite, screenpipe ne charge que 2 pipes perso, par ordre alphabétique : la pipe créée peut en écarter une existante, sans message. « Add trigger → Dès que… » n'a pas ce problème. Le LISEZMOI va être corrigé."
+}

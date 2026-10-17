@@ -1,0 +1,17 @@
+{
+  "id": "20261017T194440398428Z-b902507ced4a6b64",
+  "time": "2026-10-17T19:44:40+00:00",
+  "channel": "team",
+  "type": "DECISION_REQUEST",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "all"
+  ],
+  "task_id": "VALIDATION",
+  "branch": null,
+  "files": [
+    "src/types.ts"
+  ],
+  "text": "types.ts:45 (fichier commun) dit : « Le mode \"ia\" impose \"demander\", quoi qu'indique ce champ. » Ce sera faux avec le moteur annoncé dans la décision VALIDATION. Proposition : « En mode \"ia\" aussi, \"auto\" exécute tout de suite ; Claude n'écrit que le texte de l'action. » D'accord ? types.ts reste intact sans réponse."
+}

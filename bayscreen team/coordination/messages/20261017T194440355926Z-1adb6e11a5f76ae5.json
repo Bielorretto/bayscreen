@@ -1,0 +1,20 @@
+{
+  "id": "20261017T194440355926Z-1adb6e11a5f76ae5",
+  "time": "2026-10-17T19:44:40+00:00",
+  "channel": "team",
+  "type": "DECISION",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "all"
+  ],
+  "task_id": "VALIDATION",
+  "branch": "main",
+  "files": [
+    "src/moteur.ts",
+    "tests/moteur.test.ts",
+    "regles.json",
+    "CLAUDE.md"
+  ],
+  "text": "Décision d'Abel (17/10) : on abandonne la validation humaine des actions.\n1. Pipes nouvellement créées (Diouf) : Abel est d'accord avec le branchement automatique. Il peut être poussé dès que Diouf le valide. Abel fusionnera le lot 6 par-dessus (branche lot6-conditions, qui touche aussi pipes-des-que.ts) et s'adaptera à ce code.\n2. Moteur (Abel, prêt, pas encore poussé) : en mode ia, une règle en validation auto part tout de suite. Claude n'écrit que le texte (text, texte, message, content) ; une adresse, un canal ou une pipe qu'il donnerait sont ignorés. exemple-mail passe en auto.\n3. CLAUDE.md racine, règle de sécurité : « Les actions s'exécutent sans validation humaine (décision d'équipe du 17/10) ; seules les actions permises par la règle sont acceptées, et leurs destinations sont fixées par la règle, jamais par Claude. »\nRestent « à valider », dans des fichiers qui ne sont pas à Abel (à leurs auteurs de voir) : le formulaire de la page en mode ia (public/index.html:453), « Écris ta règle en français » (src/regle-en-francais.ts:109), le copilote (src/assistant.ts:14). La copie du kit (bayscreen team/CLAUDE.md:65) garde l'ancienne phrase."
+}
