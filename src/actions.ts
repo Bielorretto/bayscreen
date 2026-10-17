@@ -22,12 +22,15 @@ export async function lancerPipe(pipe: string, corps?: { run_context?: Record<st
 
 /** Relevé d'une exécution lancée : toutes les 3 s, 15 min au plus (réglable par les tests). */
 export const suivi = { pasMs: 3_000, limiteMs: 15 * 60_000 };
+/** Dernière notification d'échec envoyée par pipe (son corps), jusqu'à une exécution terminée de cette pipe. */
+const signalees = new Map<string, string>();
 
 /**
  * Relève l'exécution jusqu'à un statut final (queued et running ne le sont pas), ou la limite ; ne lève jamais.
  * completed, ou cancelled (arrêt demandé, neutre pour screenpipe aussi) : une ligne d'info. Autre statut final (failed,
  * timed_out…) : une alerte au journal et UNE notification screenpipe, avec la cause et comment débloquer.
- * stderr et error_message peuvent contenir ce que la pipe a lu (écran, mails) :
+ * La même notification n'est pas renvoyée pour une pipe (événement relancé, même cause) tant qu'une exécution ne s'est pas
+ * terminée (signalees). stderr et error_message peuvent contenir ce que la pipe a lu (écran, mails) :
  * ils ne vont qu'au corps de la notification, nettoyés (causeLisible), jamais au journal, que GET /api/etat sert à toute requête locale.
  */
 async function suivreExecution(pipe: string, execution: number, bus: Bus) {
@@ -37,18 +40,29 @@ async function suivreExecution(pipe: string, execution: number, bus: Bus) {
       await Bun.sleep(suivi.pasMs);
       const e = (await screenpipe.executionPipe(pipe, execution))?.data;
       if (!e?.status || e.status === "queued" || e.status === "running") continue;
-      if (e.status === "completed") return bus.journaliser("info", `${quoi} terminée`);
+      if (e.status === "completed") {
+        signalees.delete(pipe); // cause levée : le prochain échec se notifie de nouveau
+        return bus.journaliser("info", `${quoi} terminée`);
+      }
       if (e.status === "cancelled") return bus.journaliser("info", `${quoi} arrêtée avant la fin (cancelled)`);
       const d = pourDebloquer(`${e.error_message ?? ""}\n${e.stderr ?? ""}`, "execution")!;
       bus.journaliser("alerte", `${quoi} en échec (${e.status}). ${d.texte}`);
-      return await screenpipe.notifier({
-        pipe_name: "des-que",
-        title: `Dès que : la pipe « ${pipe} » n'a pas pu tourner`,
-        body: `${texteBrut(causeLisible(e.error_message, e.stderr) || `statut ${e.status}, sans message d'erreur`)}\n\n${d.texte}`,
-        priority: "high",
-        autoDismissMs: 0,
-        ...(d.bouton && { actions: [d.bouton] }),
-      });
+      const body = `${texteBrut(causeLisible(e.error_message, e.stderr) || `statut ${e.status}, sans message d'erreur`)}\n\n${d.texte}`;
+      if (signalees.get(pipe) === body) return; // déjà affichée, identique : pas une deuxième
+      signalees.set(pipe, body); // avant l'envoi : deux exécutions qui échouent ensemble n'en font qu'une
+      return await screenpipe
+        .notifier({
+          pipe_name: "des-que",
+          title: `Dès que : la pipe « ${pipe} » n'a pas pu tourner`,
+          body,
+          priority: "high",
+          autoDismissMs: 0,
+          ...(d.bouton && { actions: [d.bouton] }),
+        })
+        .catch((err) => {
+          signalees.delete(pipe); // pas arrivée : l'échec suivant la renverra
+          throw err;
+        });
     }
     bus.journaliser("alerte", `${quoi} toujours en cours après ${Math.round(suivi.limiteMs / 60_000)} min : suivi arrêté`);
   } catch (err: any) {

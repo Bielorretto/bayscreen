@@ -53,9 +53,12 @@ mock.module("../src/screenpipe", () => ({
 }));
 /** Notifications reçues par screenpipe (POST :11435/notify), corps lus en JSON. */
 const notifications: Record<string, unknown>[] = [];
+/** Vrai : le panneau de notifications de screenpipe ne répond pas (503). */
+let panneauFerme = false;
 // Filet : une requête qui échapperait aux simulations échoue ici au lieu de partir vers screenpipe ou Claude.
 const reseau = spyOn(globalThis, "fetch").mockImplementation((async (url: unknown, init?: RequestInit) => {
   if (String(url) === "http://localhost:11435/notify") {
+    if (panneauFerme) return new Response("panneau fermé", { status: 503 });
     notifications.push(JSON.parse(String(init?.body)));
     return new Response("{}");
   }
@@ -966,6 +969,45 @@ test("relance : un échec réel (stderr de l'exécution 24) → une alerte au jo
   ]);
   expect(lignesSuivi(moteur, "relance-echec")).toEqual([["alerte", `pipe « relance-echec » : exécution 24 en échec (failed). ${debloquer}`]]);
   expect(lancement(moteur)?.statut).toBe("executee"); // la pipe est bien partie : c'est la notification qui prévient
+});
+
+test("relance : la même cause ne fait qu'UNE notification (même événement relancé, deux exécutions en échec) ; après une exécution terminée, de nouveau", async () => {
+  const moteur = new Moteur(join(dossier, "regles-relance-double.json"));
+  await brancher(moteur, "relance-double");
+  notifications.length = 0;
+  const echec = { id: 24, status: "failed", stdout: "", stderr: STDERR_24, error_type: null, error_message: null };
+  executions.set("relance-double", () => ({ data: echec }));
+  const evt = prixCasque();
+  await moteur.emettre(evt);
+  await moteur.emettre(evt); // relancé : même événement, et les deux exécutions échouent de la même façon, en même temps
+  await attendre(() => lignesSuivi(moteur, "relance-double").length === 2);
+  await Bun.sleep(20);
+  expect(notifications).toHaveLength(1);
+  expect(lignesSuivi(moteur, "relance-double").map(([niveau]) => niveau)).toEqual(["alerte", "alerte"]); // chaque échec reste au journal
+  // Une exécution terminée lève la cause : l'échec suivant, même identique, se notifie de nouveau.
+  executions.set("relance-double", () => ({ data: { id: 24, status: "completed" } }));
+  await moteur.emettre(prixCasque());
+  await attendre(() => lignesSuivi(moteur, "relance-double").length === 3);
+  executions.set("relance-double", () => ({ data: echec }));
+  await moteur.emettre(prixCasque());
+  await attendre(() => notifications.length === 2);
+  expect(notifications[1]).toEqual(notifications[0]!);
+});
+
+test("relance : une notification d'échec qui n'est pas arrivée (panneau de screenpipe fermé) part à l'échec suivant", async () => {
+  const moteur = new Moteur(join(dossier, "regles-relance-panneau.json"));
+  await brancher(moteur, "relance-panneau");
+  notifications.length = 0;
+  executions.set("relance-panneau", () => ({ data: { id: 24, status: "failed", stderr: STDERR_24, error_type: null, error_message: null } }));
+  panneauFerme = true;
+  try {
+    await moteur.emettre(prixCasque());
+    await attendre(() => lignesSuivi(moteur, "relance-panneau").some(([, m]) => m.includes("suivi interrompu (screenpipe POST /notify → 503")));
+  } finally {
+    panneauFerme = false;
+  }
+  await moteur.emettre(prixCasque());
+  await attendre(() => notifications.length === 1);
 });
 
 test("relance : une exécution terminée normalement → une ligne d'info au journal, aucune notification", async () => {
