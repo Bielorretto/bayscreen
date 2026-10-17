@@ -56,28 +56,6 @@ export async function demanderJSON<T>(o: {
   return JSON.parse(bloc.text) as T;
 }
 
-/** Réponse en texte libre (questions pendant une visio). */
-export async function demanderTexte(o: {
-  systeme: string;
-  contenu: string;
-  modele?: string;
-  effort?: Effort;
-  maxTokens?: number;
-}): Promise<string> {
-  const rep = await client.messages.create({
-    model: o.modele ?? config.modeleRapide,
-    max_tokens: o.maxTokens ?? 1024,
-    system: `${o.systeme}\n\n${GARDE_FOU}`,
-    messages: [{ role: "user", content: o.contenu }],
-    ...(o.effort ? { output_config: { effort: o.effort } } : {}),
-  });
-  return rep.content
-    .filter((b) => b.type === "text")
-    .map((b) => (b as { text: string }).text)
-    .join("\n")
-    .trim();
-}
-
 /**
  * Schéma de la proposition d'action en mode « ia ».
  * Les paramètres passent en chaîne JSON (params_json) : un objet libre dans un schéma
