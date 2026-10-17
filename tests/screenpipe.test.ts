@@ -32,4 +32,11 @@ describe("mémoire", () => {
     expect(s).toHaveLength(1);
     expect(s[0]!.extrait).toContain("1 290 €");
   });
+
+  test("l'extrait part du corps de la page, pas de l'onglet ni des autres onglets", async () => {
+    const page = `Devis n° 42 - Navigateur | Onglet personnel | 127.0.0.1:4310/devis/42 ${"menu ".repeat(80)}Devis n° 42 Client : Camille 10 casques Total : 1 290 € TTC`;
+    const s = await souvenirs("Devis n° 42", {}, async () => ({ data: [ecran(9, page)] }));
+    expect(s[0]!.extrait).toContain("Total : 1 290 €");
+    expect(s[0]!.extrait).not.toContain("Onglet personnel");
+  });
 });

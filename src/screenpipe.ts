@@ -129,10 +129,23 @@ export async function souvenirs(
     .slice(0, o.max ?? 3)
     .map(({ c }) => {
       const t = String(c.text ?? "").replace(/\s+/g, " ");
-      const i = Math.max(0, ...mots.map((m) => t.toLowerCase().indexOf(m)).filter((x) => x >= 0).slice(0, 1));
-      // ponytail: extrait autour du premier mot trouvé, pas l'écran entier (moins de données privées envoyées)
-      return { quand: String(c.timestamp ?? ""), appli: String(c.app_name ?? ""), fenetre: String(c.window_name ?? "").slice(0, 80), extrait: t.slice(Math.max(0, i - 100), i + 200) };
+      const i = debutExtrait(t, mots);
+      // ponytail: un extrait autour des mots trouvés, pas l'écran entier (moins de données privées envoyées)
+      return { quand: String(c.timestamp ?? ""), appli: String(c.app_name ?? ""), fenetre: String(c.window_name ?? "").slice(0, 80), extrait: t.slice(Math.max(0, i - 50), i + 350) };
     });
+}
+
+/** Là où le plus de mots cherchés se suivent de près ; à égalité, le plus bas sur l'écran (le corps d'une page plutôt que son onglet). */
+function debutExtrait(t: string, mots: string[]): number {
+  const bas = t.toLowerCase();
+  let meilleur = { debut: 0, score: 0 };
+  for (const m of mots)
+    for (let i = bas.indexOf(m); i >= 0; i = bas.indexOf(m, i + 1)) {
+      const proche = bas.slice(i, i + 200);
+      const score = mots.filter((x) => proche.includes(x)).length;
+      if (score > meilleur.score || (score === meilleur.score && i > meilleur.debut)) meilleur = { debut: i, score };
+    }
+  return meilleur.debut;
 }
 
 /** Texte non fiable (mail, transcription, sortie de Claude) pour un body : en bloc de code, donc ni lien ni image actifs. */
