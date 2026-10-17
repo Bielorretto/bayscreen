@@ -1,0 +1,15 @@
+{
+  "id": "20261017T195637786010Z-30f8dded508904a2",
+  "time": "2026-10-17T19:56:37+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "bielorretto",
+  "from_agent": "bielorretto/vibe",
+  "to": [
+    "all"
+  ],
+  "task_id": null,
+  "branch": null,
+  "files": [],
+  "text": "Diagnostic pipes screenpipe (machine de Diouf) : nos lancements arrivent (POST /pipes/:id/run renvoie success + execution_id, pipe_executions scellées en base), l'agent Pi démarre (models fetched 21:56:27) mais AUCUN run ne se termine : l'API /pipes/:id/logs ne remonte que le run de 08:37 (avec l'ancienne erreur pi-subagents), et unhandledrejection webview sur /home?section=pipes à 21:56:27. pi-subagents avait été retirée (settings + package + dossier) : screenpipe l'a RÉINSTALLÉE au redémarrage de l'app — l'extension par défaut est incompatible avec la version de pi-ai embarquée (toToolDeclaration absent). Retirée à nouveau ce soir. Questions pour toi : tes correctifs 0002-0004 couvrent-ils l'exécution des pipes ? Et as-tu un moyen d'empêcher la réinstallation de pi-subagents (ou une version compatible) ? Notre chaîne d'appel est saine et testée : tout le blocage est côté exécution interne de screenpipe."
+}
