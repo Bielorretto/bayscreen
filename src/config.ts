@@ -22,6 +22,9 @@ export const config = {
   /** Variantes de la phrase d'appel, séparées par |. À ajuster après le test de la phase 0. */
   phrasesAppel: liste(process.env.PHRASES_APPEL, "ok claude|okay claude|ok clode|ok claud"),
 
+  /** Identifiant Discord (17 à 20 chiffres) mentionné dans chaque message Discord ; vide = aucune mention. */
+  discordMention: process.env.DISCORD_MENTION ?? "",
+
   fichierRegles: process.env.FICHIER_REGLES ?? "regles.json",
   fichierSources: process.env.FICHIER_SOURCES ?? "sources.json",
 };

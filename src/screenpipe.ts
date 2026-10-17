@@ -62,9 +62,9 @@ export const screenpipe = {
   telegramEnvoyer: (corps: { text: string; instance?: string }) =>
     sp("/connections/telegram/send", { method: "POST", body: JSON.stringify(corps) }),
 
-  /** Discord par webhook (vu dans le code de screenpipe) : l'URL du webhook reste côté screenpipe. */
+  /** Discord par webhook (vérifié : 204) : l'URL du webhook reste côté screenpipe. */
   discordEnvoyer: (corps: { content: string }) =>
-    sp("/connections/discord/proxy", { method: "POST", body: JSON.stringify(corps) }),
+    sp("/connections/discord/proxy", { method: "POST", body: JSON.stringify(corpsDiscord(corps.content)) }),
 
   /** IMAP, lecture seule (vérifié) : la liste n'a pas le corps, d'où mail(). 401 si IMAP n'est pas branché. */
   mails: (mailbox: string, limit = 20) =>
@@ -85,6 +85,15 @@ export const screenpipe = {
     if (!res.ok) throw new ErreurScreenpipe(res.status, `screenpipe POST /notify → ${res.status} ${(await res.text()).slice(0, 300)}`);
   },
 };
+
+/**
+ * Corps d'un message Discord. Mentionne config.discordMention s'il est valide, et n'autorise aucune
+ * autre mention : un texte écrit par Claude d'après un mail ne peut pas alerter @everyone.
+ */
+export function corpsDiscord(content: string, mention = config.discordMention) {
+  const id = /^\d{17,20}$/.test(mention) ? mention : "";
+  return { content: id ? `<@${id}> ${content}` : content, allowed_mentions: { parse: [], users: id ? [id] : [] } };
+}
 
 const MOTS_VIDES = new Set(["avec", "pour", "dans", "votre", "vous", "nous", "merci", "bonjour", "test", "from", "with", "your", "this", "that"]);
 

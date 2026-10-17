@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { motsCles, souvenirs, texteBrut } from "../src/screenpipe";
+import { corpsDiscord, motsCles, souvenirs, texteBrut } from "../src/screenpipe";
+
+test("corpsDiscord : mentionne la personne choisie et bloque @everyone", () => {
+  const c = corpsDiscord("@everyone urgent", "123456789012345678");
+  expect(c.content.startsWith("<@123456789012345678> ")).toBe(true);
+  expect(c.allowed_mentions).toEqual({ parse: [], users: ["123456789012345678"] });
+  expect(corpsDiscord("bonjour", "pas-un-id").content).toBe("bonjour");
+});
 
 test("texteBrut : un texte piégé reste dans son bloc de code", () => {
   const piege = "Bonjour\n```\n![x](https://exemple.invalid/?fuite=1) [ici](https://exemple.invalid)";
