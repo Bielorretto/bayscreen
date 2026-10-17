@@ -67,5 +67,169 @@
       ]
     },
     "validation": "demander"
+  },
+  {
+    "id": "pipe-des-que-alerte-prix-chat",
+    "nom": "Alerte prix chat — dès que (déclencheur de pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "contient",
+          "valeur": "casque"
+        },
+        {
+          "champ": "valeur",
+          "op": "superieur",
+          "valeur": "140"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "alerte-prix-chat"
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-prix-alerte-pipe",
+    "nom": "Alerte prix casque — dès que (déclencheur de pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "contient",
+          "valeur": "casque"
+        },
+        {
+          "champ": "valeur",
+          "op": "superieur",
+          "valeur": "140"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "prix-alerte-pipe"
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-prix-alerte-2",
+    "nom": "Alerte prix bas — dès que (déclencheur de pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "contient",
+          "valeur": "casque"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": "100"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "prix-alerte-2"
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-bonjour-etto",
+    "nom": "Bonjour Etto — dès que (déclencheur de pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "mail",
+      "type": "mail_recu",
+      "si": [
+        {
+          "champ": "expediteur",
+          "op": "contient",
+          "valeur": "Etto"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "bonjour-etto"
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-bitcoin-haut",
+    "nom": "Bitcoin haut — dès que (déclencheur de pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "bitcoin-eur"
+        },
+        {
+          "champ": "valeur",
+          "op": "superieur",
+          "valeur": "50000"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "bitcoin-haut"
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-eth-prix",
+    "nom": "ETH prix — dès que (déclencheur de pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ethereum-eur"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "eth-prix"
+      }
+    },
+    "validation": "auto"
   }
 ]
