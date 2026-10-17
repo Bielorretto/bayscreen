@@ -28,6 +28,9 @@ bun run test:notification-panel-actions
 Attendu : `Tests  33 passed (33)`, puis `notification panel actions: 3 checks passed`. Sans le
 correctif 0001, le test Swift échoue sur `FAIL: prompt survives the click`.
 
+Si vous avez déjà appliqué 0001, `git am` s'arrête dessus : n'appliquez que les suivants,
+`git am /chemin/vers/bayscreen/screenpipe-correctif/000[2-4]*.patch`.
+
 ## 2. Compiler l'appli (environ 11 min et 5 Go)
 
 Il faut un Mac Apple Silicon, Rust 1.94.0 en aarch64 (`rust-toolchain.toml` du dépôt), un `cmake`
@@ -53,7 +56,7 @@ Depuis `apps/screenpipe-app-tauri` :
 
 | Mode | Commande | Données, port de l'API | Ce qui marche |
 | --- | --- | --- | --- |
-| Isolé (par défaut, sans risque pour vos données) | `./src-tauri/target/debug-dev/screenpipe-app` | `~/.screenpipe-dev`, 3130 | « Add trigger → Dès que… », mais **pas** la pastille Event API |
+| Isolé (par défaut, sans risque pour vos données) | `./src-tauri/target/debug-dev/screenpipe-app` | `~/.screenpipe-dev`, 3130 | « Add trigger → Dès que… » ; **ne cliquez pas** sur la pastille Event API (voir « Limites connues ») |
 | Données réelles (celui d'Abel pour la démo) | quitter d'abord l'appli screenpipe installée, puis `SCREENPIPE_DEV_USE_PROD_DATA=1 ./src-tauri/target/debug-dev/screenpipe-app` | `~/.screenpipe`, 3030 | tout, Event API compris |
 
 - En mode isolé, le journal affiche
@@ -107,10 +110,15 @@ port 4310) et les sources d'exemple.
 
 ## Limites connues
 
-- La pastille Event API écrit en dur dans `~/.screenpipe/pipes` : elle ne marche pas en mode isolé.
-- Le moteur n'accepte que l'origine `tauri://localhost` (macOS, Linux) : sous Windows, il refuse l'appli.
+- La pastille Event API écrit en dur dans `~/.screenpipe/pipes`. En mode isolé, la pipe arrive
+  donc dans les pipes de l'appli installée, que l'instance isolée ne voit pas.
+- Formule gratuite ou plan non vérifié : screenpipe ne charge que 2 pipes personnelles, les
+  premières par ordre alphabétique. Event API écrit sa pipe sans passer par screenpipe (pas de
+  `POST /pipes/install`), qui ne peut donc pas refuser : une pipe existante peut cesser d'être
+  chargée, sans message.
+- Le moteur n'accepte que l'origine `tauri://localhost` (build de l'étape 2, macOS ou Linux). Sous
+  Windows et en `bun tauri dev`, il refuse l'appli, qui affiche « moteur injoignable ».
 - Les textes ajoutés sont en français, sans passer par la traduction de l'appli.
-- Formule gratuite : 2 pipes personnelles au plus ; chaque création par Event API en prend une.
 - Sans le moteur, « Dès que… » et Event API restent visibles, mais la condition ne se déclenche jamais.
 
 ## Vérifié chez Abel (17/10, 20 h 14)
