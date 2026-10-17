@@ -17,7 +17,8 @@ class KitTests(unittest.TestCase):
         self.root = Path(self.tmp.name) / "repo"
         self.root.mkdir()
         for name in ("scripts", "sessions", "coordination"):
-            shutil.copytree(SOURCE / name, self.root / name)
+            # Sans les vrais messages de l'équipe : le dépôt de test part d'une boîte vide.
+            shutil.copytree(SOURCE / name, self.root / name, ignore=shutil.ignore_patterns("*.json"))
         # team.json de test, indépendant des vrais membres du dépôt
         (self.root / "team.json").write_text(json.dumps({"project_name": "TEST", "members": ["membre1", "membre2", "membre3"], "integration_owner": "membre1", "shared_branch": "main", "default_language": "fr"}), encoding="utf-8")
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
@@ -104,6 +105,8 @@ class KitTests(unittest.TestCase):
 
     def test_sync_coordination_between_clones(self):
         git = lambda cwd, *a: subprocess.run(["git", "-C", str(cwd), *a], check=True, capture_output=True)
+        # Le vrai .gitignore, qui ignore les messages sur main : sans « add -f », aucun ne voyageait.
+        shutil.copy(SOURCE / ".gitignore", self.root / ".gitignore")
         remote = Path(self.tmp.name) / "remote.git"
         git(self.tmp.name, "init", "-q", "--bare", str(remote))
         git(self.root, "add", "-A"); git(self.root, "commit", "-qm", "kit"); git(self.root, "branch", "-M", "main")
