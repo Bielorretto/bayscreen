@@ -5,6 +5,7 @@ import { config } from "./config";
 import type { Copilote } from "./copilote";
 import type { Moteur } from "./moteur";
 import { screenpipe, texteBrut, type NotificationScreenpipe } from "./screenpipe";
+import * as pipesDesQue from "./pipes-des-que";
 import type { Evenement, MessageUI, Regle } from "./types";
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
@@ -98,6 +99,21 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
           // data/ est ignoré par git : ce fichier contient des extraits de la vraie mémoire.
           const f = Bun.file(process.env.FICHIER_TACHES ?? "data/taches.json");
           return json((await f.exists()) ? ((await f.json()) as unknown[]) : []);
+        }
+
+        // Pont « dès que » : traduit les déclencheurs custom des pipes screenpipe en règles du moteur.
+        if (pathname === "/api/pipes/synchroniser" && req.method === "POST") {
+          const rapports = await pipesDesQue.synchroniserPipes(moteur.regles);
+          for (const r of rapports) {
+            if (r.statut === "branchee" && r.regle) {
+              moteur.regles = [...moteur.regles.filter((x) => x.id !== r.regle!.id), r.regle];
+            }
+          }
+          if (rapports.some((r) => r.statut === "branchee")) await moteur.sauverRegles();
+          const n = (s: string) => rapports.filter((r) => r.statut === s).length;
+          moteur.journaliser("info", `pipes screenpipe : ${n("branchee")} branchée(s), ${n("deja")} déjà, ${n("refusee")} refusée(s), ${n("erreur")} erreur(s)`);
+          moteur.diffuser(moteur.etat());
+          return json({ ok: true, rapports });
         }
 
         if (pathname === "/api/copilote/question" && req.method === "POST") {
