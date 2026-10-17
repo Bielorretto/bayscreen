@@ -17,6 +17,7 @@ export async function lancerPipe(pipe: string, corps?: { run_context?: Record<st
   // Sans await : ni l'exécuteur ni emettre, qui l'attend (et POST /api/evenements avec lui), n'attendent la fin de la pipe.
   const execution = Number(r?.execution_id);
   if (bus && Number.isSafeInteger(execution) && execution > 0) void suivreExecution(pipe, execution, bus);
+  else bus?.journaliser("alerte", `pipe « ${pipe} » : screenpipe n'a pas donné d'execution_id, son sort ne sera pas suivi`);
   return r;
 }
 

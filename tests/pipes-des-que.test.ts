@@ -37,6 +37,8 @@ const envois: { chemin: string; corps: string }[] = [];
 const releves: string[] = [];
 /** Réponses de screenpipe aux relevés, par pipe ; sans entrée, l'exécution est terminée. */
 const executions = new Map<string, () => unknown>();
+/** Réponse de screenpipe à POST /pipes/:id/run, par pipe ; sans entrée, { success: true, execution_id: 24 }. */
+const reponsesRun = new Map<string, unknown>();
 const vraiScreenpipe = await import("../src/screenpipe");
 mock.module("../src/screenpipe", () => ({
   ...vraiScreenpipe,
@@ -48,7 +50,8 @@ mock.module("../src/screenpipe", () => ({
     }
     if (!init.method) return { data: pipes }; // GET /pipes
     envois.push({ chemin, corps: String(init.body) });
-    return { success: true, execution_id: 24 };
+    const run = chemin.match(/^\/pipes\/([^/]+)\/run$/)?.[1];
+    return run && reponsesRun.has(run) ? reponsesRun.get(run) : { success: true, execution_id: 24 };
   },
 }));
 /** Notifications reçues par screenpipe (POST :11435/notify), corps lus en JSON. */
@@ -1072,6 +1075,20 @@ test("relance : le suivi ne rallonge ni l'exécuteur pipe.lancer ni emettre (don
     liberer();
   }
   await attendre(() => lignesSuivi(moteur, "relance-attente").length === 1);
+});
+
+test("relance : /run sans execution_id (autre version de screenpipe, proxy) → une alerte au journal, sort non suivi, aucun relevé", async () => {
+  const moteur = new Moteur(join(dossier, "regles-relance-sans-id.json"));
+  await brancher(moteur, "relance-sans-id");
+  for (const reponse of [{ success: true }, { success: true, execution_id: null }]) {
+    reponsesRun.set("relance-sans-id", reponse);
+    await moteur.emettre(prixCasque());
+  }
+  await Bun.sleep(20);
+  expect(releves.filter((c) => c.startsWith("/pipes/relance-sans-id/"))).toEqual([]);
+  const ligne = ["alerte", "pipe « relance-sans-id » : screenpipe n'a pas donné d'execution_id, son sort ne sera pas suivi"];
+  expect(moteur.journal.filter((l) => l.message.startsWith("pipe « relance-sans-id » : ")).map((l) => [l.niveau, l.message])).toEqual([ligne, ligne]);
+  expect([...moteur.actions.values()].filter((a) => a.nom === "pipe.lancer").map((a) => a.statut)).toEqual(["executee", "executee"]);
 });
 
 test("relance : le relevé s'arrête à la limite, et sur une erreur, attrapée ; aucune notification", async () => {
