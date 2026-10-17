@@ -35,32 +35,38 @@ const COULEURS: Record<string, string> = {
 };
 let collection = { couleur: "bleu", modifieeLe: null as string | null, par: null as string | null };
 
-// Le mail de la designeuse, remis au moteur comme s'il arrivait par IMAP : aucun envoi réel.
-const MAIL_DESIGNEUSE = {
-  expediteur: "Léa Martin <lea.design@atelier-demo.example>",
-  objet: "Collection Été : on passe en rouge ?",
-  corps: "Bonjour,\n\nAprès le shooting d'hier, le bleu de la collection Été ne rend pas bien. Peux-tu passer toute la collection du bleu au rouge ?\n\nMerci !\nLéa, design, Atelier Démo",
+// Mails fictifs, remis au moteur comme s'ils arrivaient par IMAP : aucun envoi réel.
+type MailDemo = { expediteur: string; nom: string; initiale: string; teinte: string; objet: string; corps: string };
+const MAILS: Record<string, MailDemo> = {
+  designeuse: {
+    expediteur: "Léa Martin <lea.design@atelier-demo.example>", nom: "Léa Martin", initiale: "L", teinte: "#ec4899",
+    objet: "Collection Été : on passe en rouge ?",
+    corps: "Bonjour,\n\nAprès le shooting d'hier, le bleu de la collection Été ne rend pas bien. Peux-tu passer toute la collection du bleu au rouge ?\n\nMerci !\nLéa, design, Atelier Démo",
+  },
+  devis: {
+    expediteur: "Camille Durand <camille@client-demo.example>", nom: "Camille Durand", initiale: "C", teinte: "#0ea5e9",
+    objet: "Devis n° 42 : délai et remise ?",
+    corps: "Bonjour,\n\nMerci pour le devis n° 42 (10 casques audio sans fil). Pouvez-vous me confirmer le délai de livraison ? Et une remise est-elle possible à partir de 10 unités ?\n\nBien cordialement,\nCamille Durand",
+  },
 };
 const PORT_MOTEUR = Number(process.env.PORT_MOTEUR ?? 4300);
+const echapper = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-const mailDesigneuse = `<!doctype html>
+const pageMail = (id: string, m: MailDemo) => `<!doctype html>
 <html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Boîte de réception · démo</title>
 <body style="margin: 0; font-family: system-ui, sans-serif; background: #f4f4f5; color: #18181b">
 <div style="max-width: 44rem; margin: 2.5rem auto; padding: 0 1rem">
   <div style="font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: #71717a">Boîte de réception · données fictives</div>
   <article style="background: #fff; border: 1px solid #e4e4e7; border-radius: 14px; padding: 1.5rem; margin-top: .8rem">
-    <h1 style="font-size: 1.35rem; margin: 0 0 1rem">Collection Été : on passe en rouge ?</h1>
+    <h1 style="font-size: 1.35rem; margin: 0 0 1rem">${echapper(m.objet)}</h1>
     <div style="display: flex; gap: .8rem; align-items: center; margin-bottom: 1.2rem">
-      <div style="width: 2.4rem; height: 2.4rem; border-radius: 50%; background: #ec4899; color: #fff; display: grid; place-items: center; font-weight: 600">L</div>
-      <div><div><strong>Léa Martin</strong> &lt;lea.design@atelier-demo.example&gt;</div><div style="color: #71717a; font-size: .9rem">à moi · aujourd'hui</div></div>
+      <div style="width: 2.4rem; height: 2.4rem; border-radius: 50%; background: ${m.teinte}; color: #fff; display: grid; place-items: center; font-weight: 600">${echapper(m.initiale)}</div>
+      <div><div>${echapper(m.expediteur)}</div><div style="color: #71717a; font-size: .9rem">à moi · aujourd'hui</div></div>
     </div>
-    <p>Bonjour,</p>
-    <p>Après le shooting d'hier, le bleu de la collection Été ne rend pas bien. Peux-tu passer toute la collection du bleu au rouge ?</p>
-    <p>Merci !<br>Léa, design, Atelier Démo</p>
+    ${m.corps.split("\n\n").map((para) => `<p>${echapper(para).replace(/\n/g, "<br>")}</p>`).join("\n    ")}
   </article>
   <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem; flex-wrap: wrap">
     <button id="recevoir" style="font: inherit; padding: .6rem 1rem; border-radius: 8px; border: 1px solid #18181b; background: #18181b; color: #fff; cursor: pointer">Faire arriver ce mail (démo)</button>
-    <a href="/collection" target="_blank" style="color: #18181b">Voir la collection</a>
     <span id="resultat" style="color: #71717a"></span>
   </div>
 </div>
@@ -69,7 +75,7 @@ const mailDesigneuse = `<!doctype html>
     const out = document.getElementById("resultat");
     out.textContent = "…";
     try {
-      const r = await fetch("/mail/designeuse/recevoir", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const r = await fetch("/mail/${id}/recevoir", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       const j = await r.json().catch(() => ({}));
       out.textContent = r.ok ? "Mail remis au moteur Dès que." : "Erreur : " + (j.erreur ?? r.status);
     } catch (e) { out.textContent = "Erreur : " + e.message; }
@@ -116,13 +122,16 @@ Bun.serve({
       console.log(`collection : ${couleur} (par ${collection.par ?? "?"})`);
       return Response.json({ ok: true, couleur });
     }
-    if (url.pathname === "/mail/designeuse") return new Response(mailDesigneuse, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-    if (req.method === "POST" && url.pathname === "/mail/designeuse/recevoir") {
-      if (!enJson(req)) return json415();
+    const mail = url.pathname.match(/^\/mail\/(\w+)(\/recevoir)?$/);
+    if (mail && Object.hasOwn(MAILS, mail[1]!)) {
+      const m = MAILS[mail[1]!]!;
+      if (!mail[2]) return new Response(pageMail(mail[1]!, m), { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      if (req.method !== "POST" || !enJson(req)) return json415();
+      const { expediteur, objet, corps } = m;
       const r = await fetch(`http://127.0.0.1:${PORT_MOTEUR}/api/evenements`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "mail", type: "mail_recu", donnees: MAIL_DESIGNEUSE }),
+        body: JSON.stringify({ source: "mail", type: "mail_recu", donnees: { expediteur, objet, corps } }),
         signal: AbortSignal.timeout(5_000),
       }).catch((e: Error) => e);
       if (!(r instanceof Response)) return Response.json({ erreur: `moteur injoignable : ${r.message}` }, { status: 502 });
