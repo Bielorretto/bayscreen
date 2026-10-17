@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Collection Été 2027 · Atelier Démo</title>
 <!-- Scénario « designeuse » (données fictives). La couleur vient de GET /collection/etat, relevé chaque seconde ;
-     seule une automatisation la change (POST /collection/couleur). Tout texte venu du serveur passe par textContent. -->
+     seule une automatisation la change (POST /collection/couleur). Tout texte venu du serveur passe par textContent.
+     Entre deux prises : POST {"couleur":"bleu"} sans « par » ramène l'écran de départ (« Coloris d'origine »). -->
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.5S5.5 14.6 5.5 20.6a10.5 10.5 0 0 0 21 0C26.5 14.6 16 2.5 16 2.5Z' fill='%232563eb' stroke='%231c1815' stroke-opacity='.35' stroke-width='1.2'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
@@ -43,7 +45,7 @@
   .rubriques { display: flex; gap: 30px; font-size: 13px; color: var(--doux); }
   .rubriques .ici { color: var(--encre); box-shadow: inset 0 -1px 0 currentColor; padding-bottom: 3px; }
   .bandeau-droite { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
-  .fictif { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--pale); }
+  .fictif { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--doux); }
   .direct { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 10px; border: 1px solid var(--filet); border-radius: 99px; font-size: 12px; font-weight: 500; letter-spacing: .02em; background: color-mix(in oklab, #fff 55%, transparent); }
   .direct-point { position: relative; width: 7px; height: 7px; border-radius: 50%; background: #1f9d55; }
   .direct-point::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1px solid #1f9d55; opacity: 0; animation: onde 2s ease-out infinite; }
@@ -59,8 +61,9 @@
   }
   .bloc-titre { grid-area: titre; padding-top: 38px; align-self: end; }
   .surtitre { margin: 0 0 18px; font-size: 11px; letter-spacing: .24em; text-transform: uppercase; color: var(--doux); }
-  .surtitre span { color: var(--pale); }
-  h1 { margin: 0; font: 400 clamp(2.45rem, 7vw, 6.2rem)/.94 var(--serif); letter-spacing: -.022em; }
+  .surtitre span { color: var(--doux); }
+  /* Taille calée sur la colonne du titre (largeur moins l'encart de 380 px) : la ligne du coloris ne déborde jamais. */
+  h1 { margin: 0; font: 400 min(7vw, 6.2rem, calc((87.2vw - 380px) / 7.6))/.94 var(--serif); letter-spacing: -.022em; }
   .coloris-ligne { display: block; white-space: nowrap; }
   #coloris-titre { display: inline-block; font-style: italic; color: var(--t-texte); padding-right: .06em; }
   .chapeau { grid-area: intro; align-self: end; margin: 0; padding-top: 38px; max-width: 40ch; color: var(--doux); font-size: 14.5px; line-height: 1.6; text-wrap: pretty; }
@@ -73,23 +76,30 @@
   .pastille { position: relative; width: 19px; height: 19px; border-radius: 50%; background: var(--p); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .12), inset 0 2px 3px rgb(255 255 255 / .28); }
   .pastille::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1px solid var(--encre); opacity: 0; transform: scale(.7); transition: opacity .45s ease, transform .55s cubic-bezier(.2, .8, .2, 1); }
   .pastille[aria-current="true"]::after { opacity: 1; transform: none; }
-  .nuancier-nom { font: italic 400 19px/1 var(--serif); color: var(--encre); }
+  /* Largeur du nom le plus long réservée : le retour à la ligne ne dépend pas du coloris (pas de saut au changement). */
+  .nuancier-nom { min-width: 7.2em; font: italic 400 19px/1 var(--serif); color: var(--encre); }
 
   /* Encart de provenance */
   .provenance { grid-area: provenance; align-self: end; position: relative; margin-top: 22px; padding: 18px 20px 16px; border: 1px solid var(--filet); border-radius: 10px; background: color-mix(in oklab, #fff 62%, transparent); overflow: hidden; }
-  .provenance::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--t-texte); transition: background-color 1.1s ease; }
+  /* --t-carte : le nouveau coloris, posé sur l'encart dès la cause (avant le reste de la page). */
+  .provenance::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--t-carte, var(--t-texte)); transition: background-color .35s ease; }
   .prov-libelle { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 10.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--doux); }
-  .goutte { width: 12px; height: 15px; fill: var(--t-texte); transition: fill 1.1s ease; }
-  .prov-statut { font-size: 11.5px; color: var(--doux); white-space: nowrap; }
+  .goutte { width: 12px; height: 15px; fill: var(--t-carte, var(--t-texte)); transition: fill .35s ease; }
+  .prov-statut { flex: none; font-size: 11.5px; color: var(--doux); white-space: nowrap; }
   .prov-statut::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #1f9d55; vertical-align: 1px; }
-  .provenance.en-cours .prov-statut::before { background: var(--t); animation: clignote .7s ease-in-out infinite alternate; }
+  .provenance.en-cours .prov-statut::before { background: var(--t-carte, var(--t)); animation: clignote .7s ease-in-out infinite alternate; }
   @keyframes clignote { to { opacity: .25; } }
-  .prov-titre { margin: 0; font: 400 25px/1.1 var(--serif); }
-  .prov-detail { margin: 6px 0 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
-  .prov-pied { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--filet); font-size: 12px; color: var(--doux); }
-  .provenance.vient { animation: halo 1.6s ease-out; }
+  /* Hauteur constante dans tous les états (pas de saut de page au changement) : titre sur une ligne (réduit au besoin
+     par le script), détail sur deux lignes réservées et jamais plus, pied sur une ligne. */
+  .prov-titre { margin: 0; font: 400 25px/31px var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prov-detail { height: 3em; overflow: hidden; margin: 4px 0 0; font-size: 14px; font-weight: 500; line-height: 1.5; text-wrap: pretty; }
+  .prov-quoi, .prov-quand { display: block; }
+  .prov-quand { color: var(--doux); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .prov-pied { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--filet); font-size: 12px; color: var(--doux); }
+  #prov-trajet { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .provenance.vient { animation: halo 2.4s ease-out; }
   .provenance.vient .prov-ligne { animation: monte .7s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--k) * 90ms); }
-  @keyframes halo { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--t) 40%, transparent); } 100% { box-shadow: 0 0 0 18px transparent; } }
+  @keyframes halo { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--t-halo, var(--t)) 38%, transparent); } 100% { box-shadow: 0 0 0 16px transparent; } }
   @keyframes monte { from { opacity: 0; transform: translateY(8px); } }
 
   /* Grille des modèles */
@@ -105,17 +115,19 @@
   .scene.sans-transition { transition: none; }
   .scene::before { content: ""; position: absolute; inset: 0; background: radial-gradient(90% 75% at 50% 38%, rgb(255 255 255 / .7), rgb(255 255 255 / 0) 70%); pointer-events: none; }
   .scene::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: linear-gradient(rgb(0 0 0 / 0), rgb(60 40 20 / .05)); pointer-events: none; }
-  .scene-num, .scene-matiere { position: absolute; top: 14px; z-index: 2; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--doux); }
+  /* Un ton plus foncé que --doux : au moins 4,8:1 sur le fond de scène, quel que soit le coloris. */
+  .scene-num, .scene-matiere { position: absolute; top: 14px; z-index: 2; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: #625a51; }
   .scene-num { left: 16px; }
-  .scene-matiere { right: 16px; color: var(--pale); }
+  .scene-matiere { right: 16px; }
   .calque { position: absolute; left: -1%; right: -1%; bottom: 9%; aspect-ratio: 1.6; z-index: 1; --cuir: #2563eb; --fil: #e3e9f7; }
   .calque svg { display: block; width: 100%; height: 100%; overflow: visible; }
   .calque-voile {
     will-change: transform;
-    -webkit-mask-image: linear-gradient(100deg, #000 calc(var(--avancee) * 130% - 27%), transparent calc(var(--avancee) * 130% - 3%));
-    mask-image: linear-gradient(100deg, #000 calc(var(--avancee) * 130% - 27%), transparent calc(var(--avancee) * 130% - 3%));
+    /* Front de teinture net (fondu de 6 %) : on voit le nouveau cuir gagner sur l'ancien, sans teinte intermédiaire. */
+    -webkit-mask-image: linear-gradient(100deg, #000 calc(var(--avancee) * 108% - 8%), transparent calc(var(--avancee) * 108% - 2%));
+    mask-image: linear-gradient(100deg, #000 calc(var(--avancee) * 108% - 8%), transparent calc(var(--avancee) * 108% - 2%));
   }
-  .lueur { opacity: 0; transition: opacity .4s ease; transform: translateX(calc(var(--avancee) * 577px - 89px)); }
+  .lueur { opacity: 0; transition: opacity .4s ease; transform: translateX(calc(var(--avancee) * 480px - 44px)); }
   .en-teinture .lueur { opacity: 1; }
   .calque-lueur { mix-blend-mode: soft-light; pointer-events: none; }
   figcaption { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; padding: 14px 2px 0; }
@@ -123,12 +135,12 @@
   .modele-prix { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; align-self: end; }
   .modele-type { grid-column: 1 / -1; margin-top: 7px; font-size: 13px; color: var(--doux); }
   .modele-coloris { display: inline-flex; align-items: center; gap: 7px; }
-  .modele-coloris::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c-legende, var(--t)); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .14); transition: background-color .5s ease; }
+  .modele-coloris::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c-legende, var(--t)); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .14); transition: background-color .2s ease; }
 
   /* Fil de teinture en haut de page */
   .barre { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: var(--t); transform: scaleX(0); transform-origin: 0 50%; z-index: 10; pointer-events: none; }
 
-  footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 30px; padding: 16px var(--marge) 22px; border-top: 1px solid var(--filet); font-size: 11.5px; color: var(--pale); }
+  footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 30px; padding: 16px var(--marge) 22px; border-top: 1px solid var(--filet); font-size: 11.5px; color: var(--doux); }
 
   /* Teintes des chaussures : tout dérive de --cuir (posée sur chaque calque) */
   .chaussure .c { fill: var(--cuir); }
@@ -172,7 +184,8 @@
     .marque-lieu { display: none; }
     .fictif { font-size: 9.5px; letter-spacing: .1em; }
     .bandeau-droite { gap: 10px; }
-    main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "titre" "grille" "provenance" "intro"; }
+    /* L'encart suit le titre : en demi-écran comme sur téléphone, la cause reste visible à côté des modèles. */
+    main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "titre" "provenance" "grille" "intro"; }
     .bloc-titre { padding-top: 22px; }
     .surtitre { margin-bottom: 12px; font-size: 10px; }
     h1 { font-size: clamp(2rem, 9.6vw, 3rem); }
@@ -189,7 +202,9 @@
     .modele-type { margin-top: 4px; font-size: 11.5px; }
     .modele-type .sep, .modele-type .forme { display: none; }
     .provenance { margin-top: 18px; padding: 14px 16px 13px; }
-    .prov-titre { font-size: 21px; }
+    .prov-titre { font-size: 21px; line-height: 26px; }
+    .prov-pied { flex-direction: column; align-items: flex-start; gap: 3px; }
+    #prov-trajet { max-width: 100%; }
     .chapeau { padding-top: 16px; font-size: 13.5px; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -237,11 +252,13 @@
     <clipPath id="clip-aube"><use href="#aube-tige"/><use href="#aube-languette"/></clipPath>
 
     <!-- Rive -->
-    <path id="rive-tige" d="M44,198 C40,180 41,160 48,146 C50,141.5 53,139 57,138.5 C92,140.5 128,148 160,150 C178,150.5 192,145 204,138.5 C238,135.5 288,143 324,157 C348,166.5 363,180 369,192 C371.6,197.5 372.4,203 371.5,208 C352,220 300,222 252,218 C200,208 150,201.5 112,201 L44,201 Z"/>
+    <!-- Gorge relevée (204,126) et empeigne bombée : le cou-de-pied a du volume. -->
+    <path id="rive-tige" d="M44,198 C40,180 41,160 48,146 C50,141.5 53,139 57,138.5 C92,140.5 128,148 160,150 C178,149 192,138 204,126 C240,120 290,130 326,149 C350,161 364,178 369,192 C371.6,197.5 372.4,203 371.5,208 C352,220 300,222 252,218 C200,208 150,201.5 112,201 L44,201 Z"/>
     <clipPath id="clip-rive-tige"><use href="#rive-tige"/></clipPath>
 
     <!-- Quai -->
-    <path id="quai-tige" d="M44,193 C38,176 40,156 47,138 C52,124 54.5,108 54,90 C53.5,70 53,52 55,37 C55.5,34.5 57.5,33 60,33 L146,39 C149,39.3 151,41.5 151,44.5 C152,66 155,92 164,112 C180,132 214,143 262,153 C302,160.5 334,163.5 353,172 C365.5,178 372.5,190 371,205 C352,217.5 300,220.5 250,215.5 C200,204.5 150,196 116,195.5 L44,195.5 Z"/>
+    <!-- Devant de tige droit, pli de cheville court, puis cou-de-pied convexe jusqu'au bout : un pied dedans. -->
+    <path id="quai-tige" d="M44,193 C38,176 40,156 47,138 C52,124 54.5,108 54,90 C53.5,70 53,52 55,37 C55.5,34.5 57.5,33 60,33 L146,39 C149,39.3 151,41.5 151,44.5 C152,66 154,86 158,100 C160,108 166,119 180,121 C220,126.6 300,142 353,172 C365,179 372.5,190 371,205 C352,217.5 300,220.5 250,215.5 C200,204.5 150,196 116,195.5 L44,195.5 Z"/>
     <path id="quai-elastique" d="M89,28 L129,28 C127,68 121,103 116.5,124 C114.5,131 107.5,131 105.5,124 C100,103 92.5,68 89,28 Z"/>
     <clipPath id="clip-quai-tige"><use href="#quai-tige"/></clipPath>
 
@@ -280,12 +297,14 @@
 
   <p class="chapeau">Quatre souliers cousus main à Paris, <strong>teints d’une seule couleur</strong> pour toute la saison. Le coloris change en direct, dès que l’atelier le décide.</p>
 
-  <aside class="provenance" id="provenance" aria-live="polite" aria-label="Provenance du coloris">
+  <!-- La cause d'abord : la grande ligne nomme qui a changé le coloris (champ « par »), la petite dit quand. -->
+  <aside class="provenance" id="provenance" aria-label="Provenance du coloris">
     <p class="prov-libelle"><svg class="goutte" viewBox="0 0 12 15" aria-hidden="true"><path d="M6 0.5C6 0.5 0.8 6.6 0.8 9.6a5.2 5.2 0 0 0 10.4 0C11.2 6.6 6 0.5 6 0.5Z"/></svg>Provenance du coloris</p>
     <p class="prov-titre prov-ligne" id="prov-titre" style="--k:0">Coloris d’origine</p>
-    <p class="prov-detail prov-ligne" id="prov-detail" style="--k:1">Aucune automatisation n’a encore modifié la collection.</p>
+    <p class="prov-detail prov-ligne" id="prov-detail" style="--k:1">Aucune automatisation n’a modifié ce coloris pour l’instant.</p>
     <div class="prov-pied prov-ligne" style="--k:2"><span id="prov-trajet">bleu Riviera</span><span class="prov-statut" id="prov-statut">Relevé chaque seconde</span></div>
   </aside>
+  <p class="cache" id="annonce" aria-live="polite"></p>
 
   <section class="grille" aria-label="Les quatre modèles de la collection">
     <!-- 01 · Aube, basket basse -->
@@ -358,8 +377,8 @@
         <div class="calque calque-base">
           <svg class="chaussure" viewBox="0 0 400 250" aria-hidden="true" focusable="false">
             <g class="ombre-sol"><ellipse cx="208" cy="229" rx="172" ry="8.5" fill="url(#g-sol)"/><ellipse cx="300" cy="226.3" rx="70" ry="2.4" fill="#2a1d12" fill-opacity=".34" filter="url(#f-flou-fin)"/><ellipse cx="80" cy="226.3" rx="34" ry="2.2" fill="#2a1d12" fill-opacity=".34" filter="url(#f-flou-fin)"/></g>
-            <path class="doublure-fauve" d="M57,138.5 C80,134.6 130,134.4 170,139.2 C184,140.6 196,140 204,138.5 C192,145 178,150.5 160,150 C128,148 92,140.5 57,138.5 Z"/>
-            <path d="M60,139.5 C92,141.5 128,149 160,151 C177,151.5 191,146 203,140" fill="none" stroke="#1a100a" stroke-opacity=".4" stroke-width="4" filter="url(#f-flou-fin)"/>
+            <path class="doublure-fauve" d="M57,138.5 C80,134.6 130,134.4 170,137 C184,136 196,131 204,126 C192,138 178,149 160,150 C128,148 92,140.5 57,138.5 Z"/>
+            <path d="M60,139.5 C92,141.5 128,149 160,151 C177,150 191,139.5 203,127.5" fill="none" stroke="#1a100a" stroke-opacity=".4" stroke-width="4" filter="url(#f-flou-fin)"/>
             <use href="#rive-tige" class="c"/>
             <g clip-path="url(#clip-rive-tige)">
               <rect class="lumiere" x="20" y="0" width="370" height="230"/>
@@ -374,9 +393,9 @@
               <path class="c4" d="M211.5,153.5 C216,149 231,149.4 236,154 C231,158 216,158 211.5,153.5 Z"/>
               <path class="trait-clair" d="M212.8,156.2 C218,158.9 230,158.9 234.8,156.4"/>
               <path class="trait" d="M196.5,170 C188.5,181 182.5,193 179.5,205"/>
-              <path class="bord" d="M57,138.5 C92,140.5 128,148 160,150 C178,150.5 192,145 204,138.5"/>
+              <path class="bord" d="M57,138.5 C92,140.5 128,148 160,150 C178,149 192,138 204,126"/>
               <g class="couture">
-                <path d="M58,143 C92,145 128,152.5 160,154.5 C178,155 191,150 199,145"/>
+                <path d="M58,143 C92,145 128,152.5 160,154.5 C177,153.5 190,144 199,135.8"/>
                 <path d="M89,144.6 C85.4,161 89,182 101,203.6"/>
                 <path d="M201.6,129.6 C220,132.4 238,136.2 254.8,141.4"/>
                 <path d="M199.4,166 C212,173.4 231,176 243.2,173.6"/>
@@ -384,8 +403,8 @@
                 <path d="M200.8,171.4 C193,182.4 187,194 184.2,205"/>
               </g>
               <rect x="30" y="178" width="350" height="44" fill="url(#g-ombre-bas)"/>
-              <ellipse cx="336" cy="169" rx="30" ry="5.5" transform="rotate(30 336 169)" fill="url(#g-reflet)" opacity=".55"/>
-              <ellipse cx="288" cy="148.5" rx="40" ry="3.6" transform="rotate(14 288 148.5)" fill="url(#g-reflet)" opacity=".35"/>
+              <ellipse cx="335" cy="160.5" rx="30" ry="5.5" transform="rotate(30 335 160.5)" fill="url(#g-reflet)" opacity=".55"/>
+              <ellipse cx="279" cy="134.5" rx="40" ry="3.6" transform="rotate(12 279 134.5)" fill="url(#g-reflet)" opacity=".35"/>
               <ellipse cx="47" cy="172" rx="3.6" ry="22" fill="url(#g-reflet)" opacity=".45"/>
               <ellipse cx="122" cy="174" rx="56" ry="12" fill="url(#g-reflet)" opacity=".14"/>
             </g>
@@ -428,8 +447,8 @@
               <rect x="40" y="30" width="46" height="175" fill="url(#g-ombre-dos)"/>
               <rect x="30" y="170" width="350" height="50" fill="url(#g-ombre-bas)"/>
               <ellipse cx="153" cy="82" rx="4.2" ry="34" transform="rotate(-6 153 82)" fill="url(#g-reflet)" opacity=".42"/>
-              <ellipse cx="205" cy="134" rx="34" ry="4.6" transform="rotate(22 205 134)" fill="url(#g-reflet)" opacity=".32"/>
-              <ellipse cx="333" cy="166" rx="34" ry="5.6" transform="rotate(12 333 166)" fill="url(#g-reflet)" opacity=".55"/>
+              <ellipse cx="224" cy="132.5" rx="36" ry="4.4" transform="rotate(10 224 132.5)" fill="url(#g-reflet)" opacity=".34"/>
+              <ellipse cx="330" cy="163" rx="34" ry="5.6" transform="rotate(20 330 163)" fill="url(#g-reflet)" opacity=".55"/>
               <ellipse cx="47" cy="166" rx="4" ry="22" fill="url(#g-reflet)" opacity=".36"/>
             </g>
             <path class="c2" d="M55.5,41 C54.5,30 56,19 60.5,14.5 C63.5,11.6 70,11.8 72.5,15 C72,24 72.4,32 74,42 Z"/>
@@ -507,10 +526,15 @@
     rose: ["#ec4899", "rose pivoine"], orange: ["#ea580c", "orange mandarine"], violet: ["#7c3aed", "violet iris"],
     gris: ["#6b7280", "gris ardoise"],
   };
+  // Coloris de départ de page-demo.ts. Y revenir sans « par » (remise à zéro entre deux prises) ramène l'écran de départ.
+  const ORIGINE = "bleu";
   const HEX = /^#[0-9a-f]{6}$/i;
   const DUREE = 1600, DECALAGE = 160;
+  // La cause avant l'effet : l'encart de provenance change d'abord, le titre, le nuancier et la teinture suivent.
+  const AVANT_EFFET = 600;
   const reduit = matchMedia("(prefers-reduced-motion: reduce)");
   const $ = (id) => document.getElementById(id);
+  const majuscule = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
   // Chaque scène reçoit un double de la chaussure, révélé par un masque qui balaie : la teinture.
   const scenes = [...document.querySelectorAll(".scene")].map((el, i) => {
@@ -536,11 +560,26 @@
     calque.style.setProperty("--cuir", t.hex);
     calque.style.setProperty("--fil", t.l > 0.35 ? "color-mix(in oklab, var(--cuir) 45%, #3b2c20)" : "color-mix(in oklab, var(--cuir) 22%, #fbf5ea)");
   }
+  // Couleur lisible sur le papier : les coloris clairs (blanc, jaune) sont assombris.
+  const texteDe = (t) => t.l > 0.3 ? `color-mix(in oklab, ${t.hex} 52%, #2a2018)` : t.hex;
   function racine(t) {
     const s = document.documentElement.style;
     s.setProperty("--t", t.hex);
-    s.setProperty("--t-texte", t.l > 0.3 ? `color-mix(in oklab, ${t.hex} 52%, #2a2018)` : t.hex);
+    s.setProperty("--t-texte", texteDe(t));
     $("nuancier-nom").textContent = t.nom;
+  }
+  // L'encart prend le nouveau coloris dès la cause, avant le reste de la page.
+  function carte(t) {
+    const s = $("provenance").style;
+    s.setProperty("--t-carte", texteDe(t));
+    s.setProperty("--t-halo", t.hex);
+  }
+  // Onglet : l'icône (une goutte du coloris, hexadécimal déjà validé) et le titre changent tout de suite,
+  // même quand l'onglet est caché ; l'animation complète attend qu'on revienne sur la page.
+  function onglet(t) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 2.5S5.5 14.6 5.5 20.6a10.5 10.5 0 0 0 21 0C26.5 14.6 16 2.5 16 2.5Z" fill="${t.hex}" stroke="#1c1815" stroke-opacity=".35" stroke-width="1.2"/><path d="M10.8 20.4a5.4 5.4 0 0 0 3.4 5" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></svg>`;
+    $("favicon").href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    document.title = `${majuscule(t.nom)} · Collection Été 2027 · Atelier Démo`;
   }
   function legende(s, t) {
     s.figure.style.setProperty("--c-legende", t.hex);
@@ -567,27 +606,62 @@
     }
     for (const li of ul.children) li.setAttribute("aria-current", String(li.dataset.couleur === active));
   }
-  function heure(iso) {
+  // « à l'instant · 11:43:19 », « il y a 25 s · … », « il y a 2 min · … », puis l'heure seule.
+  function quand(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "";
-    const h = d.toLocaleTimeString("fr-FR");
-    return d.toDateString() === new Date().toDateString() ? h : `${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} à ${h}`;
+    const h = d.toLocaleTimeString("fr-FR"), s = Math.round((Date.now() - d.getTime()) / 1000);
+    if (s < 10) return `à l’instant · ${h}`;
+    if (s < 60) return `il y a ${s}\u00a0s · ${h}`;
+    if (s < 3600) return `il y a ${Math.floor(s / 60)}\u00a0min · ${h}`;
+    return d.toDateString() === new Date().toDateString() ? `à ${h}` : `le ${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} à ${h}`;
   }
-  function provenance(e, t, ancienne, enCours) {
-    const carte = $("provenance");
-    carte.classList.toggle("en-cours", enCours);
-    if (!e.modifieeLe) {
-      $("prov-titre").textContent = "Coloris d’origine";
-      $("prov-detail").textContent = "Aucune automatisation n’a encore modifié la collection.";
-      $("prov-trajet").textContent = t.nom;
-      $("prov-statut").textContent = "Relevé chaque seconde";
+
+  // Encart de provenance, trois cas : départ (ou remise à zéro), changement signé par une automatisation (champ « par »,
+  // affiché en grand), changement non signé (on ne prétend alors pas qu'il est automatique).
+  let prov = { mode: "origine", quand: null };
+  function modeDe(e, t) {
+    if (!e.modifieeLe || (!e.par && t.couleur === ORIGINE)) return "origine";
+    return e.par ? "auto" : "manuel";
+  }
+  // Le titre tient sur une ligne : réduit jusqu'à 70 % si « par » est long, puis points de suspension.
+  function ajusterTitre() {
+    const el = $("prov-titre");
+    el.style.fontSize = "";
+    let taille = parseFloat(getComputedStyle(el).fontSize);
+    const min = Math.round(taille * 0.7);
+    while (el.scrollWidth > el.clientWidth + 1 && taille > min) el.style.fontSize = `${--taille}px`;
+    el.title = el.scrollWidth > el.clientWidth + 1 ? el.textContent : "";
+  }
+  // Deux lignes : ce qui s'est passé, puis quand (l'heure relative avance à chaque relevé).
+  function detail() {
+    const el = $("prov-detail");
+    if (prov.mode === "origine") {
+      const texte = "Aucune automatisation n’a modifié ce coloris pour l’instant.";
+      if (el.textContent !== texte) el.textContent = texte;
       return;
     }
-    // « automatiquement » seulement quand l'écriture dit d'où elle vient (champ par) ; sinon, sans l'affirmer.
-    $("prov-titre").textContent = e.par ? "Mis à jour automatiquement" : "Coloris mis à jour";
-    $("prov-detail").textContent = [e.par || "origine non précisée", heure(e.modifieeLe)].filter(Boolean).join(" · ");
-    $("prov-trajet").textContent = ancienne ? `${ancienne.nom} → ${t.nom}` : `Coloris actuel : ${t.nom}`;
-    $("prov-statut").textContent = enCours ? "Teinture en cours…" : "Appliqué aux 4 modèles";
+    const quoi = prov.mode === "auto" ? "Appliqué automatiquement" : "Nouveau coloris appliqué";
+    if (el.firstElementChild?.textContent !== quoi) {
+      const a = document.createElement("span"), b = document.createElement("span");
+      a.className = "prov-quoi"; a.textContent = quoi;
+      b.className = "prov-quand";
+      el.replaceChildren(a, " ", b);
+    }
+    el.lastElementChild.textContent = quand(prov.quand);
+  }
+  function statut(enCours) {
+    $("provenance").classList.toggle("en-cours", enCours);
+    $("prov-statut").textContent = enCours ? "Teinture en cours…" : prov.mode === "origine" ? "Relevé chaque seconde" : "Appliqué aux 4 modèles";
+  }
+  function provenance(e, t, ancienne, enCours) {
+    prov = { mode: modeDe(e, t), quand: e.modifieeLe };
+    $("prov-titre").textContent = prov.mode === "origine" ? "Coloris d’origine" : prov.mode === "auto" ? String(e.par) : "Coloris mis à jour";
+    $("prov-trajet").textContent = prov.mode === "origine" ? t.nom
+      : ancienne && ancienne.couleur !== t.couleur ? `${ancienne.nom} → ${t.nom}` : `Coloris actuel : ${t.nom}`;
+    detail();
+    statut(enCours);
+    ajusterTitre();
   }
   function signaler() {
     const carte = $("provenance");
@@ -609,7 +683,7 @@
     };
   }
 
-  let courant = null, cible = null, fin = null, minuteurs = [];
+  let cible = null, fin = null, minuteurs = [];
   function terminer() {
     clearTimeout(fin);
     minuteurs.forEach(clearTimeout);
@@ -624,13 +698,13 @@
     }
     void document.body.offsetWidth;
     for (const s of scenes) s.el.classList.remove("sans-transition");
-    $("provenance").classList.remove("en-cours");
-    if (courant?.modifieeLe) $("prov-statut").textContent = "Appliqué aux 4 modèles";
+    statut(false);
   }
   function teindre(t) {
     if (fin) terminer();
     cible = t;
     if (reduit.matches) { terminer(); return; }
+    statut(true);
     for (const s of scenes) peindre(s.voile, t);
     void document.body.offsetWidth;
     $("barre").animate([{ transform: "scaleX(0)", opacity: 1 }, { transform: "scaleX(1)", opacity: 1, offset: 0.82 }, { transform: "scaleX(1)", opacity: 0 }], { duration: DUREE + DECALAGE * 3 + 500, easing: "cubic-bezier(.65,0,.35,1)" });
@@ -642,36 +716,77 @@
     fin = setTimeout(terminer, DUREE + DECALAGE * (scenes.length - 1) + 120);
   }
 
+  // Ce que montrait cet onglet, gardé pour la session de l'onglet : si le navigateur le décharge (économiseur de
+  // mémoire) puis le recharge, le changement manqué est rejoué au lieu d'apparaître déjà fait.
+  const CLE = "atelier-demo:collection-vue";
+  function lireVue() {
+    try { const v = JSON.parse(sessionStorage.getItem(CLE) ?? "null"); return v && Object.hasOwn(NUANCES, v.couleur) ? v : null; } catch { return null; }
+  }
+  function memoriser(e) {
+    try { sessionStorage.setItem(CLE, JSON.stringify({ couleur: e.couleur, modifieeLe: e.modifieeLe ?? null, par: typeof e.par === "string" ? e.par : null })); } catch {}
+  }
+
   function demarrer() {
     document.body.classList.add("pret");
     requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove("demarrage")));
   }
-  function changer(ancienne, t, e) {
-    if (ancienne.couleur === t.couleur) { provenance(e, t, null, false); signaler(); return; }
-    const couleurTitre = getComputedStyle($("coloris-titre")).color;
-    racine(t); nuancier(e.permises, t.couleur); titre(t, true, couleurTitre);
-    provenance(e, t, ancienne, !reduit.matches); signaler();
-    teindre(t);
+  let affiche = null, effet = null;
+  function changer(t, e) {
+    clearTimeout(effet);
+    effet = null;
+    memoriser(e);
+    if (affiche && t.couleur === affiche.couleur) { provenance(e, t, null, fin !== null); signaler(); return; }
+    // 1. La cause : qui a changé le coloris, et quand.
+    provenance(e, t, affiche, !reduit.matches);
+    carte(t);
+    signaler();
+    $("annonce").textContent = prov.mode === "auto" ? `Coloris passé en ${t.nom} : ${e.par}` : `Coloris : ${t.nom}`;
+    // 2. L'effet, un instant après : titre, nuancier, puis la teinture balaie les quatre modèles.
+    const suite = () => {
+      effet = null;
+      const couleurTitre = getComputedStyle($("coloris-titre")).color;
+      affiche = t;
+      racine(t); nuancier(e.permises, t.couleur); titre(t, true, couleurTitre);
+      teindre(t);
+    };
+    if (reduit.matches) suite(); else effet = setTimeout(suite, AVANT_EFFET);
   }
-  // Onglet caché pendant le changement (on regarde le mail) : la teinture attend qu'on revienne sur la page.
-  let differe = null;
+  // Onglet caché pendant le changement (on regarde le mail) : seuls l'icône et le titre de l'onglet changent ;
+  // la séquence complète se joue quand on revient sur la page.
+  let courant = null, differe = null, retour = null;
+  function planifierRetour(ms) {
+    clearTimeout(retour);
+    retour = setTimeout(() => {
+      if (document.hidden || !differe) return;
+      const d = differe;
+      differe = null;
+      changer(d.t, d.e);
+    }, ms);
+  }
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden || !differe) return;
-    const { ancienne, t, e } = differe;
-    differe = null;
-    setTimeout(() => changer(ancienne, t, e), 450);
+    if (document.hidden) return;
+    if (differe) planifierRetour(450);
+    relever();
   });
   function appliquer(e) {
     const t = teinte(String(e.couleur ?? ""), e.hex);
     if (!courant) {
-      cible = t;
-      for (const s of scenes) { peindre(s.base, t); peindre(s.voile, t); legende(s, t); }
-      racine(t); titre(t, false); nuancier(e.permises, t.couleur); provenance(e, t, null, false);
+      const vue = lireVue();
+      const avant = vue && vue.couleur !== t.couleur ? vue : null;
+      const e0 = avant ? { ...e, couleur: avant.couleur, hex: NUANCES[avant.couleur][0], modifieeLe: avant.modifieeLe, par: avant.par } : e;
+      const t0 = avant ? teinte(e0.couleur, e0.hex) : t;
+      cible = t0;
+      affiche = t0;
+      for (const s of scenes) { peindre(s.base, t0); peindre(s.voile, t0); legende(s, t0); }
+      racine(t0); carte(t0); titre(t0, false); nuancier(e0.permises, t0.couleur); provenance(e0, t0, null, false);
+      onglet(t);
       demarrer();
+      if (avant) { differe = { t, e }; if (!document.hidden) planifierRetour(900); }
+      else memoriser(e);
     } else if (t.couleur !== courant.t.couleur || e.modifieeLe !== courant.modifieeLe || e.par !== courant.par) {
-      if (document.hidden) differe = { ancienne: differe?.ancienne ?? courant.t, t, e };
-      else if (t.couleur !== courant.t.couleur) changer(courant.t, t, e);
-      else { provenance(e, t, null, false); signaler(); }
+      onglet(t);
+      if (document.hidden || differe) differe = { t, e };
+      else changer(t, e);
     }
     courant = { t, modifieeLe: e.modifieeLe, par: e.par };
   }
@@ -685,6 +800,7 @@
       const r = await fetch("/collection/etat", { cache: "no-store" });
       if (!r.ok) throw new Error(String(r.status));
       appliquer(await r.json());
+      detail(); // l'heure relative (« il y a 25 s ») avance à chaque relevé
       direct.classList.remove("hors-ligne");
       $("direct-texte").textContent = "En direct";
     } catch {
@@ -694,6 +810,8 @@
       releveEnCours = false;
     }
   }
+  document.fonts?.ready.then(ajusterTitre);
+  addEventListener("resize", () => requestAnimationFrame(ajusterTitre));
   relever();
   setInterval(relever, 1000);
   setTimeout(demarrer, 1500);

@@ -9,6 +9,7 @@
      Pastille « Démo » : remet ce mail au moteur via POST /mail/<id>/recevoir (aucun envoi réel).
      ?etat=arrive : affiche directement l'état « mail arrivé », sans animation ni envoi (captures).
      ?etat=repetition : joue l'arrivée animée, sans rien remettre au moteur (répétition de la vidéo). -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2.5' y='6.5' width='27' height='19' rx='4.5' fill='%235b5bd6'/%3E%3Cpath d='m5.5 10 10.5 7.5L26.5 10' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
@@ -50,7 +51,7 @@
   .compte { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 10px; border-radius: 10px; }
   .compte-nom { font-size: 13px; font-weight: 500; }
   .compte-adresse { font-size: 12px; color: var(--doux); }
-  .fictif { margin: 8px 10px 0; font-size: 11px; color: var(--pale); }
+  .fictif { margin: 8px 10px 0; font-size: 11px; color: #67676f; }
 
   /* Panneaux */
   .liste, .lecture { display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--panneau); border: 1px solid var(--filet); border-radius: var(--rayon); box-shadow: 0 1px 2px rgb(0 0 0 / .03); }
@@ -78,7 +79,7 @@
   .ligne:hover { background: var(--survol); }
   .ligne:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .ligne.choisie { background: var(--accent-doux); }
-  .ligne.choisie::before { content: ""; position: absolute; left: 3px; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; background: var(--accent); }
+  .ligne.choisie::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; background: var(--accent); }
   .ligne + .ligne, .ligne-env + .ligne-env .ligne { margin-top: 1px; }
   .ligne.nouvelle { animation: lueur 2.6s ease-out; }
   .ligne.nouvelle .ligne-contenu { animation: glisse .6s cubic-bezier(.2, .8, .2, 1) both .12s; }
@@ -87,7 +88,6 @@
   .ligne-contenu { display: contents; }
   .avatar { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: color-mix(in oklab, var(--teinte, #888) 17%, #fff); color: color-mix(in oklab, var(--teinte, #888) 78%, #000); font-weight: 600; font-size: 14px; }
   .non-lu-point { position: absolute; left: 5px; top: 22px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-  .ligne.choisie .non-lu-point { left: 9px; }
   .ligne.nouvelle .non-lu-point { animation: eclot .7s cubic-bezier(.3, 1.6, .5, 1) both .35s; }
   .ligne.nouvelle .non-lu-point::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1.5px solid var(--accent); opacity: 0; animation: onde 1.3s ease-out .5s 2; }
   @keyframes eclot { from { transform: scale(0); } }
@@ -105,13 +105,11 @@
   .etiquette::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--e, #888); }
 
   /* Volet de lecture */
-  .lecture { position: relative; }
+  .lecture { position: relative; container-type: inline-size; }
   .vide { display: grid; place-content: center; justify-items: center; gap: 6px; height: 100%; padding: 24px; text-align: center; transition: opacity .3s ease; }
   .vide svg { width: 220px; height: auto; margin-bottom: 14px; }
   .vide-titre { font-size: 15px; font-weight: 600; }
   .vide-texte { max-width: 30ch; font-size: 13px; color: var(--doux); }
-  .vide-touches { margin-top: 14px; font-size: 12px; color: var(--pale); }
-  .vide-touches kbd { padding: 1px 6px; border: 1px solid var(--filet); border-radius: 5px; font: 500 11px Inter, sans-serif; }
   .message { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .message.entre { animation: entre .5s cubic-bezier(.2, .8, .2, 1); }
   @keyframes entre { from { opacity: 0; transform: translateY(10px); } }
@@ -154,13 +152,26 @@
   .demo[data-etat="apercu"] .demo-signe { background: none; border: 1.5px dashed #c4c4cc; width: 9px; height: 9px; }
   @keyframes tourne { to { transform: rotate(1turn); } }
 
+  /* Volet de lecture étroit (fenêtre en demi-écran) : date et adresse passent sous le nom, rien ne se coupe lettre à lettre. */
+  @container (max-width: 560px) {
+    .message-defile { padding: 20px 22px 24px; }
+    .message-tete { grid-template-columns: 42px minmax(0, 1fr); }
+    .message-date { grid-column: 2; }
+    .message-adresse { display: block; margin-left: 0; }
+  }
   @media (max-width: 1180px) {
     .appli { grid-template-columns: 204px minmax(0, 340px) minmax(0, 1fr); }
     .section-etiquettes, .compte-adresse { display: none; }
     .message-defile { padding: 22px 26px; }
   }
+  /* Sous 1 000 px, plus de colonne des dossiers : liste et lecture gardent de la place. */
+  @media (max-width: 1000px) {
+    .appli { grid-template-columns: minmax(0, 330px) minmax(0, 1fr); padding: 8px; }
+    .dossiers { display: none; }
+  }
   @media (max-width: 860px) {
-    .appli { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 100vh; padding: 8px; }
+    /* 56 px en bas : la pastille « Démo » ne recouvre ni le champ de réponse ni la fin de la liste. */
+    .appli { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 100vh; padding: 8px 8px 56px; }
     .dossiers { display: none; }
     .liste-defile { overflow: visible; }
     .lecture { min-height: 70vh; }
@@ -241,8 +252,7 @@
         <circle cx="194" cy="46" r="17" fill="#5b5bd6"/><path d="m186.5 46.5 5 5 9.5-10" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <div class="vide-titre">Aucun message sélectionné</div>
-      <div class="vide-texte">Votre boîte de réception est à jour. Les nouveaux messages apparaîtront ici.</div>
-      <div class="vide-touches"><kbd>↑</kbd> <kbd>↓</kbd> pour naviguer</div>
+      <div class="vide-texte">Sélectionnez un message pour le lire.</div>
     </div>
   </main>
 </div>
@@ -314,11 +324,16 @@
     if (HEX.test(couleur ?? "")) e.style.setProperty("--e", couleur);
     return e;
   }
-  const apercu = (corps) => corps.replace(/\s+/g, " ").trim();
+  // Typographie française, à l'affichage seulement (ce que le serveur remet au moteur ne change pas) : apostrophe
+  // courbe, espace fine insécable avant ? ! ;, insécable avant : et », après «, entre un nombre et son unité.
+  const typo = (s) => s.replace(/'/g, "’").replace(/ ([?!;])/g, "\u202f$1").replace(/ ([:»])/g, "\u00a0$1")
+    .replace(/« /g, "«\u00a0").replace(/(n°|\d) (?=\d|€|h\b)/g, "$1\u00a0");
+  // Aperçu sur une ligne : seuls les vrais blancs sont fusionnés (\s avalerait aussi les espaces insécables).
+  const apercu = (corps) => corps.replace(/[ \t\r\n]+/g, " ").trim();
 
   // Liste
   const liste = $("liste");
-  const messages = DECOR.map((m) => ({ ...m }));
+  const messages = DECOR.map((m) => ({ ...m, objet: typo(m.objet), corps: typo(m.corps) }));
   let choisi = null;
 
   function ligne(m) {
@@ -454,7 +469,7 @@
     const envoi = envoyer ? remettre() : null;
     if (!envoyer) etatDemo("apercu", "Aperçu · rien n’a été envoyé au moteur");
     const adresse = /<([^>]+)>/.exec(D.expediteur)?.[1] ?? D.expediteur;
-    const m = { nom: D.nom || D.expediteur, adresse, initiale: D.initiale, teinte: D.teinte, objet: D.objet, corps: D.corps, date: new Date(), nonLu: true };
+    const m = { nom: D.nom || D.expediteur, adresse, initiale: D.initiale, teinte: D.teinte, objet: typo(D.objet), corps: typo(D.corps), date: new Date(), nonLu: true };
     messages.push(m);
     let bloc = liste.querySelector('[data-groupe="Aujourd’hui"]');
     if (!bloc) {
@@ -469,8 +484,10 @@
     liste.scrollTop = 0;
     if (anime) { void env.offsetWidth; env.classList.add("s-ouvre"); env.classList.remove("fermee"); }
     compteurs(anime);
-    if (anime) setTimeout(() => ouvrir(m, true), 950);
-    else ouvrir(m, true, false);
+    // Sur téléphone, le volet de lecture est sous la liste : on y descend, comme au clic sur une ligne.
+    const montrer = () => { if (matchMedia("(max-width: 860px)").matches) $("lecture").scrollIntoView({ behavior: anime ? "smooth" : "auto", block: "start" }); };
+    if (anime) setTimeout(() => { ouvrir(m, true); montrer(); }, 950);
+    else { ouvrir(m, true, false); montrer(); }
     if (envoi) envoi.then((res) => setTimeout(() => afficherResultat(res), Math.max(0, 1300 - (performance.now() - debut))));
   }
   demo.addEventListener("click", async () => {
