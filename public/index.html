@@ -437,11 +437,12 @@ async function synchroniserPipes() {
   }
   if (!j.ok) { $("pipes-rapport").textContent = "erreur : " + (j.erreur ?? "?"); return; }
   $("pipes-rapport").innerHTML = (j.rapports ?? []).map((p) => {
-    if (p.statut === "branchee") {
+    if (p.statut === "a_valider") {
       const si = (p.regle.desQue.si ?? []).map((c) => `${esc(c.champ)} ${esc(c.op)} ${esc(c.valeur)}`).join(" et ");
-      return `<div class="item"><b>${esc(p.pipe)}</b> branchée — dès que ${esc(p.regle.desQue.source)}/${esc(p.regle.desQue.type)}${si ? ` (${si})` : ""} → pipe.lancer</div>`;
+      return `<div class="item"><b>${esc(p.pipe)}</b> traduite — dès que ${esc(p.regle.desQue.source)}/${esc(p.regle.desQue.type)}${si ? ` (${si})` : ""} → pipe.lancer ; accès et essais OK, à valider dans « Actions à valider »</div>`;
     }
-    if (p.statut === "deja") return `<div class="item"><b>${esc(p.pipe)}</b> déjà branchée</div>`;
+    if (p.statut === "deja") return `<div class="item"><b>${esc(p.pipe)}</b> déjà traitée (inchangée)</div>`;
+    if (p.statut === "retiree") return `<div class="item"><b>${esc(p.pipe)}</b> retirée de screenpipe : règle arrêtée</div>`;
     return `<div class="item"><b>${esc(p.pipe)}</b> non branchée — ${esc(p.motif ?? p.statut)}</div>`;
   }).join("") || '<p class="doux">Aucune pipe avec un déclencheur « dès que ».</p>';
 }

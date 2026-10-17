@@ -105,7 +105,7 @@ export function demarrerServeur(moteur: Moteur, copilote: Copilote) {
         if (pathname === "/api/pipes/synchroniser" && req.method === "POST") {
           const rapports = await pipesDesQue.synchroniserAutomatiquement(moteur);
           const n = (s: string) => rapports.filter((r) => r.statut === s).length;
-          moteur.journaliser("info", `pipes screenpipe : ${n("branchee")} branchée(s), ${n("deja")} déjà, ${n("refusee")} refusée(s), ${n("erreur")} erreur(s)`);
+          moteur.journaliser("info", `pipes screenpipe : ${n("a_valider")} à valider, ${n("deja")} déjà traitée(s), ${n("refusee")} refusée(s), ${n("retiree")} retirée(s), ${n("erreur")} erreur(s)`);
           return json({ ok: true, rapports });
         }
 
