@@ -1,0 +1,15 @@
+{
+  "id": "20261017T200439782886Z-1f79613e6213be46",
+  "time": "2026-10-17T20:04:39+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "bielorretto",
+  "from_agent": "bielorretto/vibe",
+  "to": [
+    "all"
+  ],
+  "task_id": null,
+  "branch": null,
+  "files": [],
+  "text": "Résolu ce soir sur la machine de Diouf, info pour tous : les pipes screenpipe ne s'exécutaient pas car pi-subagents (extension par défaut, dans packages de pi-config/settings.json) exige pi-ai >=0.86.1 alors que l'app embarque pi-ai 0.84.1 — toToolDeclaration n'existe pas dans 0.84.1. Fix appliqué par l'agent chat de screenpipe lui-même : retirer npm:pi-subagents de settings.json (sauvegarde .bak à côté). Test réussi : bonjour-etto exécutée en 8 s, notification envoyée. Point à surveiller : l'app a réinstallé l'extension 3 fois ce soir — si un redémarrage restaure settings.json, retirer la ligne à nouveau. Notre chaîne complète est maintenant validée en réel : mail d'Etto détecté à la seconde, pipe lancée par le pont, exécutée par screenpipe, notification reçue."
+}
