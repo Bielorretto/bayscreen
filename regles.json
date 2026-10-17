@@ -67,5 +67,73 @@
       ]
     },
     "validation": "demander"
+  },
+  {
+    "id": "iss-paris-carte",
+    "nom": "L’ISS approche de Paris (moins de 1 000 km) → direct vidéo de la NASA et carte",
+    "active": false,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ISS Paris"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": 999.5
+        },
+        {
+          "champ": "ancienne",
+          "op": "superieur",
+          "valeur": 999.5
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "ouvrir",
+      "params": {
+        "url": "http://127.0.0.1:4310/iss?lat=48.8566&lon=2.3522&nom=Paris"
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "iss-paris",
+    "nom": "L’ISS passe au-dessus de Paris → notification",
+    "active": false,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ISS Paris"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": 149.5
+        },
+        {
+          "champ": "ancienne",
+          "op": "superieur",
+          "valeur": 149.5
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "notifier",
+      "params": {
+        "text": "L’ISS passe au-dessus de Paris : elle est à {{valeurTexte}} km du centre, à plus de 400 km d’altitude"
+      }
+    },
+    "validation": "auto"
   }
 ]

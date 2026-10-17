@@ -48,6 +48,24 @@ export const executeurs: Record<string, Executeur> = {
     return { statut: res.status };
   },
 
+  /** Ouvre une page dans le navigateur par défaut. http ou https seulement : jamais file:, javascript: ni une option de `open`. */
+  ouvrir: async (params) => {
+    let url: URL;
+    try {
+      url = new URL(String(params.url));
+    } catch {
+      throw new Error("paramètre « url » invalide");
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("paramètre « url » : http ou https seulement");
+    // Environnement minimal : un navigateur lancé par open hériterait sinon des clés du .env.
+    const env = Object.fromEntries(
+      ["PATH", "HOME", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"].flatMap((k) => (process.env[k] ? [[k, process.env[k]!]] : [])),
+    );
+    const p = Bun.spawn([process.platform === "darwin" ? "open" : "xdg-open", url.href], { env, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+    if ((await p.exited) !== 0) throw new Error(`ouverture de la page → code ${p.exitCode}`);
+    return { ouverte: url.href };
+  },
+
   /** Lance un pipe screenpipe existant (POST /pipes/:id/run). */
   "pipe.lancer": async (params) => {
     if (typeof params.pipe !== "string") throw new Error("paramètre « pipe » manquant");

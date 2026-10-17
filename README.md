@@ -31,7 +31,7 @@ screenpipe (/ws/events) ─┬─► copilote.ts ── question ──► assis
 page web, mail, webhook ─┴─► moteur.ts ◄── fin de visio, demandes ─────────┘
                                  │  règles (regles.json) : fixe ou Claude
                                  ▼
-                             actions.ts ──► Slack, Telegram, webhook, pipe screenpipe
+                             actions.ts ──► Discord, Slack, Telegram, webhook, pipe screenpipe, ouvrir
                                  │
                 serveur.ts ◄─────┘──► page (public/index.html) : valider, refuser, suivre
 ```
@@ -54,6 +54,16 @@ bun run dev               # http://127.0.0.1:4300
 
 Tester sans rien brancher : `bun run evt web valeur_changee '{"nom":"cours","valeur":120,"valeurTexte":"120","ancienne":"90"}'`
 déclenche la règle d'exemple et affiche une notification dans la page.
+
+Démo sur un événement réel et prévisible, le passage de l'ISS au-dessus de Paris. Copier la source
+« ISS Paris » de `sources.exemple.json` dans `sources.json`, passer `iss-paris-carte` et `iss-paris` à
+`"active": true` (inactives dans les exemples : elles ouvriraient un onglet à chaque passage), lancer la
+page de démo (`bun scripts/page-demo.ts`), puis relancer le moteur. La source lit la distance ISS–Paris. Sous
+1 000 km, la règle `iss-paris-carte` ouvre le direct vidéo officiel de la NASA, avec la distance et la
+carte (http://127.0.0.1:4310/iss?lat=48.8566&lon=2.3522&nom=Paris) ; sous 150 km, `iss-paris` notifie.
+L'ouverture ~2 min avant le survol laisse passer une éventuelle publicité YouTube.
+L'ISS passe près de Paris quelques fois par jour : heure exacte avec
+`https://api.wheretheiss.at/v1/satellites/25544/positions?timestamps=<secondes>,…` (10 instants par appel).
 
 ## Travailler à deux avec Claude Code
 
@@ -80,7 +90,7 @@ déclenche la règle d'exemple et affiche une notification dans la page.
 | `src/copilote.ts` | visio seulement, micro seul, phrase d'appel, fin de question | Dev 1 |
 | `src/sources/web.ts` | sondage d'une page web | Dev 1 |
 | `src/claude.ts` | appels à Claude (JSON par schéma) | Dev 2 |
-| `src/actions.ts` | exécuteurs : notifier, Slack, Telegram, webhook, pipe | Dev 2 |
+| `src/actions.ts` | exécuteurs : notifier, Discord, Slack, Telegram, webhook, pipe, ouvrir (page http/https) | Dev 2 |
 | `src/assistant.ts` | réponse aux questions de visio, demandes d'action | Dev 2 |
 | `src/serveur.ts`, `public/index.html` | serveur local et page | Dev 2 |
 | `regles.json`, `sources.exemple.json` | règles et sources d'exemple | — |

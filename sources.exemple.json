@@ -10,5 +10,12 @@
     "type": "mail",
     "mailbox": "des-que",
     "intervalleSecondes": 15
+  },
+  {
+    "type": "web",
+    "nom": "ISS Paris",
+    "url": "http://127.0.0.1:4310/iss/distance?lat=48.8566&lon=2.3522",
+    "motif": "Distance\\s*:\\s*([\\d.]+)",
+    "intervalleSecondes": 5
   }
 ]

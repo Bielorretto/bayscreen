@@ -20,8 +20,12 @@ export function nombre(brut: string): number | null {
 export function surveillerPage(s: SourceWeb, bus: Bus): () => void {
   const re = new RegExp(s.motif, "i");
   let precedente: string | null = null;
+  // Un relevé lent ne doit pas croiser le suivant : sinon une réponse périmée peut déclencher deux fois.
+  let enCours = false;
 
   const tour = async () => {
+    if (enCours) return;
+    enCours = true;
     try {
       const res = await fetch(s.url, { signal: AbortSignal.timeout(15_000), headers: { "User-Agent": "des-que/0.1" } });
       const html = await res.text();
@@ -47,6 +51,8 @@ export function surveillerPage(s: SourceWeb, bus: Bus): () => void {
       });
     } catch (e: any) {
       bus.journaliser("erreur", `source « ${s.nom} » : ${e.message}`);
+    } finally {
+      enCours = false;
     }
   };
 

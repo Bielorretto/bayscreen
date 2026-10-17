@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Passage de l'ISS</title>
+<!-- Propriétaire : Dev 1. Ouverte par l'action « ouvrir » à l'approche de l'ISS : direct vidéo de la NASA, distance et carte.
+     Paramètres : nom, et lat + lon d'un point (sinon : l'équateur). -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+  :root { --fond: #0a0a0a; --texte: #fafafa; --doux: #a1a1aa; --filet: #27272a; --cible: #f59e0b; }
+  html, body { margin: 0; height: 100%; background: var(--fond); color: var(--texte); font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+  body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); }
+  #direct { width: 100%; height: 100%; border: 0; background: #000; }
+  aside { box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-left: 1px solid var(--filet); min-height: 0; }
+  .marque { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--doux); }
+  h1 { font-size: 18px; font-weight: 600; margin: 4px 0 0; }
+  #etat { font-size: 20px; font-weight: 600; margin: 0; }
+  #etat.passe { color: var(--cible); }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-variant-numeric: tabular-nums; }
+  dt { color: var(--doux); }
+  dd { margin: 0; text-align: right; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  #carte { flex: 1; min-height: 220px; border: 1px solid var(--filet); border-radius: 8px; background: var(--fond); }
+  .note { margin: 0; color: var(--doux); font-size: 12px; }
+  .leaflet-container { font: inherit; }
+  .leaflet-tooltip { background: var(--fond); color: var(--texte); border-color: var(--filet); box-shadow: none; }
+  .leaflet-tooltip-top:before { border-top-color: var(--filet); }
+  .leaflet-tooltip-right:before { border-right-color: var(--filet); }
+  @media (max-width: 800px) {
+    body { grid-template-columns: minmax(0, 1fr); grid-template-rows: 56.25vw auto; height: auto; }
+    aside { border-left: 0; border-top: 1px solid var(--filet); }
+    #carte { flex: none; height: 260px; }
+  }
+</style>
+</head>
+<body>
+<!-- Direct officiel « Live Video from the International Space Station (Official NASA Stream) ». Si NASA relance le flux,
+     l'identifiant change : le reprendre sur youtube.com/@NASA/streams. Lecture auto sans le son (sinon le navigateur la bloque). -->
+<iframe id="direct" src="https://www.youtube-nocookie.com/embed/M3HKLzjvKPc?autoplay=1&mute=1&playsinline=1&rel=0"
+  title="Direct vidéo de la NASA depuis l'ISS" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+<aside>
+  <div>
+    <div class="marque">Dès que · direct NASA</div>
+    <h1 id="titre">L'ISS passe au-dessus de…</h1>
+  </div>
+  <p id="etat" aria-live="polite">Recherche de l'ISS…</p>
+  <dl>
+    <dt id="dist-libelle">Distance</dt><dd id="dist">–</dd>
+    <dt>Latitude</dt><dd id="lat">–</dd>
+    <dt>Longitude</dt><dd id="lon">–</dd>
+    <dt>Altitude</dt><dd id="alt">–</dd>
+    <dt>Vitesse</dt><dd id="vit">–</dd>
+  </dl>
+  <div id="carte" role="img" aria-label="Carte de la position de l'ISS en direct"></div>
+  <p class="note">Vidéo : direct officiel de la NASA. Position : api.wheretheiss.at, toutes les 3 s. Pointillés : trajectoire prévue.</p>
+</aside>
+<script>
+  const API = "https://api.wheretheiss.at/v1/satellites/25544";
+  const q = new URLSearchParams(location.search);
+  const cibleLat = Number(q.get("lat")), cibleLon = Number(q.get("lon"));
+  const point = q.has("lat") && q.has("lon") && Number.isFinite(cibleLat) && Number.isFinite(cibleLon);
+  const nom = q.get("nom") || (point ? "ce point" : "l'équateur");
+  document.getElementById("titre").textContent = `L'ISS passe au-dessus de ${nom}`;
+  document.title = `ISS · ${nom}`;
+
+  const carte = L.map("carte", { worldCopyJump: true, zoomControl: false }).setView(point ? [cibleLat, cibleLon] : [0, 0], point ? 4 : 2);
+  // ponytail: Stadia sans clé, permis seulement depuis localhost/127.0.0.1 ; ailleurs, prendre une clé Stadia.
+  L.tileLayer("https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png", {
+    attribution: "© Stadia Maps, © OpenMapTiles, © OpenStreetMap", maxZoom: 8,
+  }).addTo(carte);
+
+  if (point) {
+    // Leaflet lit une chaîne comme du HTML : on lui passe un nœud texte, nom venant de l'URL.
+    const etiquette = document.createElement("span");
+    etiquette.textContent = nom;
+    L.circle([cibleLat, cibleLon], { radius: 100_000, color: "#f59e0b", weight: 1, fillOpacity: 0.12 }).addTo(carte);
+    L.circleMarker([cibleLat, cibleLon], { radius: 5, color: "#f59e0b", fillOpacity: 1 }).addTo(carte).bindTooltip(etiquette, { permanent: true, direction: "right" });
+  } else {
+    L.polyline([[0, -540], [0, 540]], { color: "#f59e0b", weight: 2, dashArray: "6 6" }).addTo(carte);
+  }
+  const trace = L.polyline([], { color: "#fafafa", weight: 2, opacity: 0.7 }).addTo(carte);
+  const prevue = L.polyline([], { color: "#fafafa", weight: 1.5, opacity: 0.5, dashArray: "4 6" }).addTo(carte);
+  const iss = L.circleMarker([0, 0], { radius: 7, color: "#0a0a0a", weight: 2, fillColor: "#fafafa", fillOpacity: 1 }).addTo(carte).bindTooltip("ISS", { permanent: true, direction: "top" });
+
+  // Distance sur la sphère terrestre (km), formule de haversine.
+  function distanceKm(a, b, c, d) {
+    const r = Math.PI / 180, dLat = (c - a) * r, dLon = (d - b) * r;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(dLon / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.sqrt(h));
+  }
+  // Recolle les longitudes pour que la trace ne traverse pas la carte au passage de ±180°.
+  function deplier(points) {
+    for (let i = 1; i < points.length; i++) {
+      while (points[i][1] - points[i - 1][1] > 180) points[i][1] -= 360;
+      while (points[i][1] - points[i - 1][1] < -180) points[i][1] += 360;
+    }
+    return points;
+  }
+  const fmt = (n, d = 2) => n.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  async function positions(decalages) {
+    const t = Math.floor(Date.now() / 1000);
+    const r = await fetch(`${API}/positions?timestamps=${decalages.map((s) => t + s).join(",")}`);
+    if (!r.ok) throw new Error(`positions → ${r.status}`);
+    return recentrer(deplier((await r.json()).map((p) => [p.latitude, p.longitude])));
+  }
+  // Ramène le dernier point dans [-180, 180] sans casser la continuité : le marqueur reste sur la même copie du monde.
+  function recentrer(pts) {
+    const k = 360 * Math.round(pts[pts.length - 1][1] / 360);
+    for (const p of pts) p[1] -= k;
+    return pts;
+  }
+  // Les 10 dernières minutes, puis les 15 suivantes (10 instants au plus par appel) ; réessayées par relever() si elles manquent.
+  const chargerTrace = () => positions([-600, -540, -480, -420, -360, -300, -240, -180, -120, -60]).then((p) => trace.setLatLngs(p)).catch(() => {});
+  const chargerPrevue = () => positions([0, 90, 180, 270, 360, 450, 540, 630, 720, 900]).then((p) => prevue.setLatLngs(p)).catch(() => {});
+  chargerTrace();
+  chargerPrevue();
+
+  let suivre = !point;
+  async function relever() {
+    // Onglet caché : on ne relève pas. L'API limite à 350 requêtes par 5 min, sources du moteur comprises.
+    if (document.hidden) return;
+    try {
+      const p = await (await fetch(API)).json();
+      if (!trace.getLatLngs().length) chargerTrace();
+      if (!prevue.getLatLngs().length) chargerPrevue();
+      const pts = recentrer(deplier(trace.getLatLngs().map((x) => [x.lat, x.lng]).concat([[p.latitude, p.longitude]]).slice(-400)));
+      trace.setLatLngs(pts);
+      iss.setLatLng(pts[pts.length - 1]);
+      if (suivre) carte.panTo(pts[pts.length - 1], { animate: true });
+      document.getElementById("lat").textContent = `${fmt(p.latitude, 3)}°`;
+      document.getElementById("lon").textContent = `${fmt(p.longitude, 3)}°`;
+      document.getElementById("alt").textContent = `${fmt(p.altitude, 0)} km`;
+      document.getElementById("vit").textContent = `${fmt(p.velocity, 0)} km/h`;
+      const km = point ? distanceKm(p.latitude, p.longitude, cibleLat, cibleLon) : Math.abs(p.latitude) * 111.2;
+      document.getElementById("dist-libelle").textContent = point ? `Distance à ${nom}` : "Distance à l'équateur";
+      document.getElementById("dist").textContent = `${fmt(km, 0)} km`;
+      const etat = document.getElementById("etat");
+      const passe = km < 150;
+      etat.textContent = passe ? `L'ISS est au-dessus de ${nom}` : `L'ISS est à ${fmt(km, 0)} km`;
+      etat.classList.toggle("passe", passe);
+    } catch {
+      document.getElementById("etat").textContent = "Position indisponible, nouvel essai…";
+    }
+  }
+  carte.on("dragstart", () => (suivre = false));
+  relever();
+  setInterval(relever, 3000);
+</script>
+</body>
+</html>
