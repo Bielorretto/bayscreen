@@ -4,7 +4,7 @@
 import { config } from "./config";
 import type { Copilote } from "./copilote";
 import type { Moteur } from "./moteur";
-import { corpsDiscord, screenpipe, texteBrut, type BoutonNotification, type NotificationScreenpipe } from "./screenpipe";
+import { screenpipe, texteBrut, type NotificationScreenpipe } from "./screenpipe";
 import type { Evenement, MessageUI, Regle } from "./types";
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
@@ -21,24 +21,22 @@ export function notificationPour(m: MessageUI): NotificationScreenpipe | null {
   if (m.type === "action" && m.action.statut === "proposee") {
     const a = m.action;
     const contenu = String(a.params.content ?? a.params.text ?? JSON.stringify(a.params));
-    const boutons: BoutonNotification[] = [{ id: "refuser", label: "Refuser", type: "dismiss" }];
-    // Un bouton ne peut viser que l'API screenpipe (vérifié) : c'est screenpipe qui envoie, avec sa clé.
-    if (a.nom === "discord.envoyer")
-      boutons.unshift({ id: "envoyer", label: "Envoyer sur Discord", type: "api", url: "/connections/discord/proxy", method: "POST", body: corpsDiscord(contenu) });
     return {
       pipe_name: "des-que",
       title: `Dès que : ${a.nom} à valider`,
       body: texteBrut(contenu) + (a.preuve ? `\n\nPourquoi :\n${texteBrut(a.preuve)}` : ""),
       priority: "high",
-      timeout_secs: 0,
-      actions: boutons,
+      autoDismissMs: 0,
+      // Rien ne s'exécute depuis la notification : un bouton link (ouvert par screenpipe en Rust,
+      // donc fiable) mène à la page, où l'on valide. Un bouton api serait un clic sans effet sur macOS.
+      actions: [{ id: "voir", label: "Voir et valider", type: "link", url: `http://127.0.0.1:${config.port}/` }],
     };
   }
   if (m.type === "action" && m.action.statut === "echec")
     return { pipe_name: "des-que", title: `Dès que : ${m.action.nom} en échec`, body: texteBrut(m.action.erreur), priority: "high" };
-  if (m.type === "reveil") return { pipe_name: "des-que", title: "Dès que : je vous écoute", body: "Posez votre question.", priority: "low", timeout_secs: 8 };
+  if (m.type === "reveil") return { pipe_name: "des-que", title: "Dès que : je vous écoute", body: "Posez votre question.", priority: "low", autoDismissMs: 8000 };
   if (m.type === "reponse")
-    return { pipe_name: "des-que", title: "Dès que : réponse", body: `${texteBrut(m.question)}\n\n${texteBrut(m.reponse)}`, timeout_secs: 0 };
+    return { pipe_name: "des-que", title: "Dès que : réponse", body: `${texteBrut(m.question)}\n\n${texteBrut(m.reponse)}`, autoDismissMs: 0 };
   return null;
 }
 

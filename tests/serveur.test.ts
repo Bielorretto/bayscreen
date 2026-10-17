@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { config } from "../src/config";
 import { notificationPour, origineAcceptee } from "../src/serveur";
 import type { Action } from "../src/types";
 
@@ -22,13 +23,11 @@ const action = (a: Partial<Action>): Action => ({
   ...a,
 });
 
-test("notificationPour : une proposition Discord porte le bouton qui envoie par screenpipe", () => {
+test("notificationPour : une proposition reste affichée et mène à la page, où l'on valide", () => {
   const n = notificationPour({ type: "action", action: action({ preuve: "mail de Camille" }) })!;
-  expect(n.actions![0]).toMatchObject({ type: "api", url: "/connections/discord/proxy", method: "POST" });
-  expect(n.actions!.at(-1)!.type).toBe("dismiss");
+  expect(n.autoDismissMs).toBe(0);
+  expect(n.actions).toEqual([{ id: "voir", label: "Voir et valider", type: "link", url: `http://127.0.0.1:${config.port}/` }]);
   expect(n.body).toContain("Pourquoi");
-  // Une autre action ne se valide pas depuis la notification : seul « Refuser » reste.
-  expect(notificationPour({ type: "action", action: action({ nom: "notifier", params: { text: "x" } }) })!.actions).toHaveLength(1);
   expect(notificationPour({ type: "action", action: action({ statut: "executee" }) })).toBeNull();
   expect(notificationPour({ type: "journal", ligne: { date: "", niveau: "info", message: "x" } })).toBeNull();
 });

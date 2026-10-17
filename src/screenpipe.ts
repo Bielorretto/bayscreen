@@ -171,8 +171,13 @@ export const texteBrut = (s: unknown, max = 800) => "```\n" + String(s ?? "").re
 export type BoutonNotification = {
   id: string;
   label: string;
-  /** api : appelle url ; pipe : lance le pipe nommé, context injecté dans sa consigne ; chat : lance prompt dans le chat */
-  type: "api" | "pipe" | "chat" | "deeplink" | "dismiss";
+  /**
+   * link : ouvre url dans le navigateur ; traité en Rust, il marche aussi dans le panneau natif macOS (native_actions.rs:940-946, vérifié).
+   * api : appelle url par un écouteur JS monté seulement dans l'overlay ; dans le panneau natif, clic probablement sans effet (lu, non reproduit).
+   * pipe : lance le pipe nommé, context injecté dans sa consigne ; chat : lance prompt dans le chat.
+   * dismiss : jamais affiché par le panneau natif (notification_panel.swift:443, vérifié).
+   */
+  type: "link" | "api" | "pipe" | "chat" | "deeplink" | "dismiss";
   /** api : une route de l'API screenpipe seulement (isLocalApiUrl, vérifié), ex. "/connections/discord/proxy" ; screenpipe ajoute la clé */
   url?: string;
   /** api : POST par défaut ; body est envoyé en JSON */
@@ -185,12 +190,12 @@ export type BoutonNotification = {
 
 export type NotificationScreenpipe = {
   title: string;
-  /** Markdown : y échapper tout texte non fiable (mail, transcription). */
-  body?: string;
+  /** Obligatoire pour screenpipe. Markdown : y échapper tout texte non fiable (mail, transcription). */
+  body: string;
   pipe_name: string;
   priority?: "high" | "normal" | "low";
-  /** 0 : reste affichée ; 20 par défaut */
-  timeout_secs?: number;
+  /** En millisecondes ; 0 : reste affichée ; 20 000 par défaut (notification_panel.swift:1116, vérifié). timeout_secs est ignoré. */
+  autoDismissMs?: number;
   actions?: BoutonNotification[];
 };
 

@@ -17,7 +17,7 @@ export const executeurs: Record<string, Executeur> = {
   notifier: async (params, bus) => {
     const message = texte(params);
     bus.journaliser("alerte", `Notification : ${message}`);
-    await screenpipe.notifier({ pipe_name: "des-que", title: "Dès que", body: texteBrut(message) });
+    await screenpipe.notifier({ pipe_name: "des-que", title: "Dès que", body: texteBrut(message), autoDismissMs: 0 });
     return { affiche: true };
   },
 
