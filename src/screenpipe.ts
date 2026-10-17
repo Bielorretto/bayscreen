@@ -82,6 +82,9 @@ export const screenpipe = {
   },
 };
 
+/** Texte non fiable (mail, transcription, sortie de Claude) pour un body : en bloc de code, donc ni lien ni image actifs. */
+export const texteBrut = (s: unknown, max = 800) => "```\n" + String(s ?? "").replace(/`/g, "'").slice(0, max) + "\n```";
+
 export type BoutonNotification = {
   id: string;
   label: string;
