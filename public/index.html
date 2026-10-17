@@ -266,7 +266,8 @@ async function synchroniserPipes() {
   $("pipes-rapport").innerHTML = (j.rapports ?? []).map((p) => {
     if (p.statut === "branchee") {
       const si = (p.regle.desQue.si ?? []).map((c) => `${esc(c.champ)} ${esc(c.op)} ${esc(c.valeur)}`).join(" et ");
-      return `<div class="item"><b>${esc(p.pipe)}</b> branchée — dès que ${esc(p.regle.desQue.source)}/${esc(p.regle.desQue.type)}${si ? ` (${si})` : ""} → pipe.lancer</div>`;
+      return `<div class="item"><b>${esc(p.pipe)}</b> branchée — dès que ${esc(p.regle.desQue.source)}/${esc(p.regle.desQue.type)}${si ? ` (${si})` : ""} → pipe.lancer` +
+        (p.source ? `<div class="doux">source ajoutée : ${esc(p.source.nom)} — ${esc(p.source.url)}</div>` : "") + "</div>";
     }
     if (p.statut === "deja") return `<div class="item"><b>${esc(p.pipe)}</b> déjà branchée</div>`;
     return `<div class="item"><b>${esc(p.pipe)}</b> non branchée — ${esc(p.motif ?? p.statut)}</div>`;
