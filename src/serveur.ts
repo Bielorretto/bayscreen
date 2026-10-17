@@ -18,6 +18,16 @@ export function origineAcceptee(req: Request, port = config.port): boolean {
 }
 
 /** Ce que l'appli screenpipe affiche pour un message du moteur ; null : rien. */
+/** Deeplink screenpipe://chat/new (préremplit le chat, n'envoie jamais rien seul) : demande à l'agent du chat de valider ou refuser l'action. */
+export function demandeChat(a: { id: string; nom: string; params: Record<string, unknown> }, geste: "valider" | "refuser"): string {
+  const resume = String(a.params.content ?? a.params.text ?? a.nom).slice(0, 600);
+  const prompt =
+    `Dès que : je ${geste === "valider" ? "valide" : "refuse"} l'action « ${a.nom} » : ${resume}\n` +
+    `Exécute exactement cette commande, puis dis-moi seulement sa réponse :\n` +
+    `curl -s -X POST http://127.0.0.1:${config.port}/api/actions/${a.id}/${geste}`;
+  return `screenpipe://chat/new?v=1&prompt=${encodeURIComponent(prompt)}`;
+}
+
 export function notificationPour(m: MessageUI): NotificationScreenpipe | null {
   if (m.type === "action" && m.action.statut === "proposee") {
     const a = m.action;
@@ -28,9 +38,13 @@ export function notificationPour(m: MessageUI): NotificationScreenpipe | null {
       body: texteBrut(contenu) + (a.preuve ? `\n\nPourquoi :\n${texteBrut(a.preuve)}` : ""),
       priority: "high",
       autoDismissMs: 0,
-      // Rien ne s'exécute depuis la notification : un bouton link (ouvert par screenpipe en Rust,
-      // donc fiable) mène à la page, où l'on valide. Un bouton api serait un clic sans effet sur macOS.
-      actions: [{ id: "voir", label: "Voir et valider", type: "link", url: `http://127.0.0.1:${config.port}/` }],
+      // On valide dans screenpipe, sans quitter l'appli : un bouton deeplink (ouvert en Rust, donc fiable ;
+      // un bouton api serait un clic sans effet sur macOS) ouvre le chat screenpipe avec la demande écrite.
+      // Rien ne part tant que l'utilisateur ne l'envoie pas lui-même : c'est son envoi qui vaut validation.
+      actions: [
+        { id: "valider", label: "Valider dans screenpipe", type: "deeplink", url: demandeChat(a, "valider") },
+        { id: "refuser", label: "Refuser dans screenpipe", type: "deeplink", url: demandeChat(a, "refuser") },
+      ],
     };
   }
   if (m.type === "action" && m.action.statut === "echec")

@@ -26,7 +26,11 @@ const action = (a: Partial<Action>): Action => ({
 test("notificationPour : une proposition reste affichée et mène à la page, où l'on valide", () => {
   const n = notificationPour({ type: "action", action: action({ preuve: "mail de Camille" }) })!;
   expect(n.autoDismissMs).toBe(0);
-  expect(n.actions).toEqual([{ id: "voir", label: "Voir et valider", type: "link", url: `http://127.0.0.1:${config.port}/` }]);
+  expect(n.actions!.map((b) => [b.id, b.type])).toEqual([["valider", "deeplink"], ["refuser", "deeplink"]]);
+  const prompt = new URL(n.actions![0]!.url!).searchParams.get("prompt")!;
+  expect(n.actions![0]!.url).toStartWith("screenpipe://chat/new?v=1&prompt=");
+  expect(prompt).toContain(`curl -s -X POST http://127.0.0.1:${config.port}/api/actions/`);
+  expect(prompt).toEndWith("/valider");
   expect(n.body).toContain("Pourquoi");
   expect(notificationPour({ type: "action", action: action({ statut: "executee" }) })).toBeNull();
   expect(notificationPour({ type: "journal", ligne: { date: "", niveau: "info", message: "x" } })).toBeNull();
