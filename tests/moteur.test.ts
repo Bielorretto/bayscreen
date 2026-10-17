@@ -39,10 +39,13 @@ describe("Moteur", () => {
   test("règle fixe en validation auto : l'action est exécutée", async () => {
     const m = new Moteur("/dev/null");
     m.regles = [regleSeuil];
+    const statutsDiffuses: string[] = [];
+    m.abonner((msg) => void (msg.type === "action" && statutsDiffuses.push(msg.action.statut)));
     await m.emettre(evt({ nom: "cours", valeur: 120 }));
     const actions = [...m.actions.values()];
     expect(actions).toHaveLength(1);
     expect(actions[0]).toMatchObject({ nom: "notifier", statut: "executee", params: { text: "cours vaut 120" } });
+    expect(statutsDiffuses).not.toContain("proposee");
   });
 
   test("règle fixe à valider : l'action attend, puis s'exécute à la validation", async () => {

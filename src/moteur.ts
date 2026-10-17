@@ -91,7 +91,9 @@ export class Moteur implements Bus {
 
   private async appliquer(r: Regle, evt: Evenement) {
     if (r.alors.mode === "fixe") {
-      const action = this.creerAction({ regleId: r.id, evenementId: evt.id, nom: r.alors.action, params: remplir(r.alors.params, evt.donnees) });
+      // En validation auto, l'action naît validée : elle n'est jamais présentée « à valider ».
+      const statut = r.validation === "auto" ? "validee" : "proposee";
+      const action = this.creerAction({ regleId: r.id, evenementId: evt.id, nom: r.alors.action, params: remplir(r.alors.params, evt.donnees), statut });
       if (r.validation === "auto") await this.executer(action.id);
       return;
     }
