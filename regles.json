@@ -1,30 +1,71 @@
 [
   {
     "id": "exemple-seuil",
-    "nom": "Valeur au-dessus de 100 → notification",
+    "nom": "Casque audio sous 100 € → notification",
     "active": true,
-    "desQue": { "source": "web", "type": "valeur_changee", "si": [{ "champ": "valeur", "op": "superieur", "valeur": 100 }] },
-    "alors": { "mode": "fixe", "action": "notifier", "params": { "text": "{{nom}} : {{valeurTexte}} (avant : {{ancienne}})" } },
-    "validation": "auto"
-  },
-  {
-    "id": "exemple-mail",
-    "nom": "Mail reçu → Claude propose un message Slack",
-    "active": true,
-    "desQue": { "source": "mail", "type": "mail_recu" },
-    "alors": {
-      "mode": "ia",
-      "consigne": "Si le mail demande une réponse ou une action rapide, propose un message Slack court qui résume la demande et qui l'a faite. Sinon, ne propose rien.",
-      "actionsPermises": ["slack.envoyer", "notifier"]
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "Casque audio"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": 100
+        },
+        {
+          "champ": "ancienne",
+          "op": "superieur",
+          "valeur": 100
+        }
+      ]
     },
-    "validation": "demander"
+    "alors": {
+      "mode": "fixe",
+      "action": "notifier",
+      "params": {
+        "text": "{{nom}} : {{valeurTexte}} € (avant : {{ancienne}} €)"
+      }
+    },
+    "validation": "auto"
   },
   {
     "id": "exemple-fin-visio",
     "nom": "Fin de visio → notification",
     "active": true,
-    "desQue": { "source": "appel", "type": "visio_terminee" },
-    "alors": { "mode": "fixe", "action": "notifier", "params": { "text": "Visio terminée ({{app}}) : {{nbLignes}} lignes transcrites" } },
+    "desQue": {
+      "source": "appel",
+      "type": "visio_terminee"
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "notifier",
+      "params": {
+        "text": "Visio terminée ({{app}}) : {{nbLignes}} lignes transcrites"
+      }
+    },
     "validation": "auto"
+  },
+  {
+    "id": "exemple-mail",
+    "nom": "Mail reçu → Claude propose un message Discord",
+    "active": true,
+    "desQue": {
+      "source": "mail",
+      "type": "mail_recu"
+    },
+    "alors": {
+      "mode": "ia",
+      "consigne": "Si le mail demande une réponse ou une action rapide, propose un message Discord court pour l’équipe : qui demande quoi, et pour quand. Si « memoire » montre un élément utile vu à l’écran (document, prix, date), cite-le avec l’heure où il a été vu. Paramètres : {\"content\": \"le message\"}. Ne recopie jamais d’adresse mail : le prénom suffit. Sinon, ne propose rien.",
+      "actionsPermises": [
+        "discord.envoyer",
+        "notifier"
+      ]
+    },
+    "validation": "demander"
   }
 ]
