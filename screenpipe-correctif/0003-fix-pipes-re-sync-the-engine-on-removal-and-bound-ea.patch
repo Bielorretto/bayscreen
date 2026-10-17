@@ -1,0 +1,163 @@
+From 1be5f07b44f09d52eb7d49bd11e253b7b78f8913 Mon Sep 17 00:00:00 2001
+From: Abel Melman <abel.melman@gmail.com>
+Date: Sat, 17 Oct 2026 09:47:02 +0200
+Subject: [PATCH 3/4] fix(pipes): re-sync the engine on removal and bound each
+ state poll
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Removing a custom condition asks the local engine to sync right away, so
+  a rule that was already wired stops now instead of on its next minute.
+- Each GET /api/pipes/etat poll carries a 2.5 s timeout, below the 3 s
+  interval: no stacked requests, and a hung engine reads as unreachable.
+- Restore the spacing in GROUP_ORDER.
+- Tests: engine error on Valider, Refuser, a state for another text
+  (waiting for translation), a disabled pipe shown as retirée, sync after
+  removal, polling stopped on unmount.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../__tests__/pipe-trigger-picker.test.tsx    | 70 +++++++++++++++++++
+ .../settings/pipe-trigger-picker.tsx          | 18 +++--
+ 2 files changed, 82 insertions(+), 6 deletions(-)
+
+diff --git a/apps/screenpipe-app-tauri/components/settings/__tests__/pipe-trigger-picker.test.tsx b/apps/screenpipe-app-tauri/components/settings/__tests__/pipe-trigger-picker.test.tsx
+index 22795de9e..0bc60810e 100644
+--- a/apps/screenpipe-app-tauri/components/settings/__tests__/pipe-trigger-picker.test.tsx
++++ b/apps/screenpipe-app-tauri/components/settings/__tests__/pipe-trigger-picker.test.tsx
+@@ -318,4 +318,74 @@ describe("PipeTriggerPicker « Dès que » trigger", () => {
+     expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument();
+     expect(engine.mock.calls.every(([url]) => String(url).startsWith(`${ENGINE}/api/`))).toBe(true);
+   });
++
++  it("shows the engine's error, refuses through the engine, and waits for the translation of a new text", async () => {
++    let refuse = false;
++    const engine = vi.fn(async (url: string, _init?: RequestInit) => {
++      if (url === `${ENGINE}/api/actions/act-1/valider`) {
++        return { ok: false, status: 400, json: async () => ({ erreur: "action introuvable ou déjà traitée" }) } as Response;
++      }
++      if (url === `${ENGINE}/api/actions/act-1/refuser`) {
++        refuse = true;
++        return response({ ok: true });
++      }
++      return response({
++        "follow-up": refuse
++          ? { declencheur: condition, statut: "refusee", motif: "branchement refusé" }
++          : { declencheur: condition, statut: "a_valider", regle, acces: [], essais: [], actionId: "act-1" },
++      });
++    });
++    vi.stubGlobal("fetch", engine);
++    renderPicker([], { custom: [condition] });
++
++    fireEvent.click(await screen.findByRole("button", { name: "Valider" }));
++    expect(await screen.findByText("Dès que : action introuvable ou déjà traitée")).toBeInTheDocument();
++    fireEvent.click(screen.getByRole("button", { name: "Refuser" }));
++    expect(await screen.findByText("Dès que : non branchée")).toBeInTheDocument();
++    expect(screen.getByText("branchement refusé")).toBeInTheDocument();
++    expect(engine).toHaveBeenCalledWith(`${ENGINE}/api/actions/act-1/refuser`, { method: "POST" });
++    cleanup();
++
++    // The engine still describes another text: no state and no button until it has translated this one.
++    vi.stubGlobal("fetch", vi.fn(async () => response({ "follow-up": { declencheur: "dès que autre chose", statut: "a_valider", actionId: "act-2" } })));
++    renderPicker([], { custom: [condition] });
++    expect(await screen.findByText("Dès que : en attente de traduction")).toBeInTheDocument();
++    expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument();
++  });
++
++  it("shows a disabled pipe as retirée and asks the engine to sync when a condition is removed", async () => {
++    const engine = vi.fn(async (_url: string, _init?: RequestInit) =>
++      response({ "follow-up": { declencheur: condition, statut: "retiree", motif: "pipe désactivée dans screenpipe" } }));
++    vi.stubGlobal("fetch", engine);
++    renderPicker([], { custom: [condition] });
++
++    expect(await screen.findByText("Dès que : retirée")).toBeInTheDocument();
++    expect(screen.getByText("pipe désactivée dans screenpipe")).toBeInTheDocument();
++    // Each poll carries a timeout shorter than the 3 s interval.
++    expect(engine.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
++
++    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
++    await waitFor(() => expect(engine).toHaveBeenCalledWith(`${ENGINE}/api/pipes/synchroniser`, { method: "POST" }));
++    expect(fetchMock).toHaveBeenCalledWith("/pipes/follow-up/config", expect.objectContaining({ body: JSON.stringify({ trigger: null }) }));
++    const sauvegarde = fetchMock.mock.invocationCallOrder.at(-1)!;
++    const synchro = engine.mock.invocationCallOrder[engine.mock.calls.findIndex(([url]) => url === `${ENGINE}/api/pipes/synchroniser`)]!;
++    expect(sauvegarde).toBeLessThan(synchro);
++  });
++
++  it("polls the engine every 3 s and stops once unmounted", () => {
++    vi.useFakeTimers();
++    try {
++      const engine = vi.fn(async (_url: string, _init?: RequestInit) => response({}));
++      vi.stubGlobal("fetch", engine);
++      renderPicker([], { custom: [condition] });
++      expect(engine).toHaveBeenCalledTimes(1);
++      vi.advanceTimersByTime(3000);
++      expect(engine).toHaveBeenCalledTimes(2);
++      cleanup();
++      vi.advanceTimersByTime(9000);
++      expect(engine).toHaveBeenCalledTimes(2);
++    } finally {
++      vi.useRealTimers();
++    }
++  });
+ });
+diff --git a/apps/screenpipe-app-tauri/components/settings/pipe-trigger-picker.tsx b/apps/screenpipe-app-tauri/components/settings/pipe-trigger-picker.tsx
+index e716af847..78840bdb3 100644
+--- a/apps/screenpipe-app-tauri/components/settings/pipe-trigger-picker.tsx
++++ b/apps/screenpipe-app-tauri/components/settings/pipe-trigger-picker.tsx
+@@ -59,6 +59,8 @@ const LABEL = "text-[10px] normal-case tracking-wide text-muted-foreground font-
+ // le traduit en règle, vérifie les accès, rejoue des essais, puis attend une validation
+ // humaine. Seule URL appelée pour lui, sans clé ni en-tête.
+ const DES_QUE = "http://127.0.0.1:4300";
++// Le moteur relit les pipes tout de suite, au lieu d'attendre son passage suivant (une minute).
++const synchroniserDesQue = () => fetch(`${DES_QUE}/api/pipes/synchroniser`, { method: "POST" }).catch(() => {});
+ 
+ // ── left-rail catalog ────────────────────────────────────────────────────────
+ 
+@@ -129,7 +131,7 @@ const OPTIONS: Option[] = [
+   { id: "obsidian", group: "obsidian", label: msg("New note", {}), sub: msg("in a vault folder", {}), app: "obsidian" },
+   { id: "pipe", group: "pipes", label: msg("After a scheduled task finishes", {}), sub: msg("chain off another scheduled task", {}) },
+ ];
+-const GROUP_ORDER = ["dès que", "recurring", "voice","meetings", "email", "calendar", "slack", "notion", "github", "linear", "todoist", "obsidian", "pipes"];
++const GROUP_ORDER = ["dès que", "recurring", "voice", "meetings", "email", "calendar", "slack", "notion", "github", "linear", "todoist", "obsidian", "pipes"];
+ 
+ function optionIcon(o: Option) {
+   if (o.app) return <IntegrationIcon icon={o.icon || o.app} className="w-4 h-4 flex items-center justify-center" fallbackClassName="h-4 w-4 text-muted-foreground" />;
+@@ -195,8 +197,11 @@ export function PipeTriggerPicker(props: PickerProps) {
+       .catch(() => fetchPipes());
+   }
+ 
+-  const remove = (kind: "events" | "custom" | "sources", i: number) =>
+-    persistTrigger({ ...trigger, [kind]: (trigger?.[kind] ?? []).filter((_, j) => j !== i) });
++  const remove = (kind: "events" | "custom" | "sources", i: number) => {
++    const enregistre = persistTrigger({ ...trigger, [kind]: (trigger?.[kind] ?? []).filter((_, j) => j !== i) });
++    // Condition retirée : le moteur arrête sa règle tout de suite.
++    if (kind === "custom") enregistre.then(synchroniserDesQue, () => {});
++  };
+ 
+   const chip = "text-xs bg-muted/50 border rounded-sm px-3 py-1.5 flex-1 font-mono truncate";
+   const xBtn = "text-muted-foreground/0 group-hover/item:text-muted-foreground hover:!text-foreground transition-all text-sm leading-none px-1";
+@@ -251,8 +256,8 @@ export function PipeTriggerPicker(props: PickerProps) {
+             onAddCustom={(texte) => {
+               const enregistre = custom.includes(texte) ? null : persistTrigger({ ...trigger, custom: [...custom, texte] });
+               setOpen(false);
+-              // Pipe enregistrée : le moteur la relit tout de suite au lieu d'attendre sa prochaine minute.
+-              enregistre?.then(() => fetch(`${DES_QUE}/api/pipes/synchroniser`, { method: "POST" })).catch(() => {});
++              // Pipe enregistrée d'abord : sinon le moteur relirait l'ancienne.
++              enregistre?.then(synchroniserDesQue, () => {});
+             }}
+           />
+         </DialogContent>
+@@ -317,7 +322,8 @@ function DesQueEtat({ pipeName, custom }: { pipeName: string; custom: string[] }
+   useEffect(() => {
+     let vivant = true;
+     const lire = () =>
+-      fetch(`${DES_QUE}/api/pipes/etat`)
++      // Délai sous l'intervalle : pas de requêtes empilées si le moteur ne répond plus.
++      fetch(`${DES_QUE}/api/pipes/etat`, { signal: AbortSignal.timeout(2500) })
+         .then((r) => (r.ok ? r.json() : null))
+         .catch(() => null)
+         .then((j) => { if (vivant) setEtats(j ?? null); });
+-- 
+2.50.1 (Apple Git-155)
+
