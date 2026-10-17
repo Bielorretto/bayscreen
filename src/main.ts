@@ -35,7 +35,7 @@ if (await fichierSources.exists()) {
 if (config.screenpipeCle) {
   try {
     const statut = await screenpipe.statutVisio();
-    if (statut.active && statut.active_meeting_id) copilote.ouvrir(statut.active_meeting_id, statut.meeting_app ?? undefined);
+    if (statut.active && statut.activeMeetingId) copilote.ouvrir(statut.activeMeetingId, statut.meetingApp ?? undefined);
   } catch (e: any) {
     moteur.journaliser("erreur", `screenpipe injoignable : ${e.message}`);
   }

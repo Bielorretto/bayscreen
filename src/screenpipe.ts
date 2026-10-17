@@ -37,11 +37,11 @@ export const screenpipe = {
 
   resumeActivite: (qs = "") => sp<any>(`/activity-summary${qs}`),
 
-  /** { active, manual, manual_active, active_meeting_id, stoppable_meeting_id, meeting_app, detection_source } */
+  /** En camelCase (vérifié, 0.4.52) : { active, manual, manualActive, activeMeetingId, stoppableMeetingId, meetingApp, detectionSource } */
   statutVisio: () =>
-    sp<{ active: boolean; active_meeting_id: number | null; meeting_app: string | null; detection_source: string | null }>("/meetings/status"),
+    sp<{ active: boolean; activeMeetingId: number | null; meetingApp: string | null; detectionSource: string | null }>("/meetings/status"),
 
-  /** Segments : { id, meeting_id, item_id, device_type, transcript?, speaker_name?, ... } */
+  /** Tableau nu en camelCase (vérifié) : { id, meetingId, itemId, deviceType, speakerName, transcript, capturedAt, ... } */
   transcriptionVisio: (id: number) => sp<any[]>(`/meetings/${id}/transcript`),
 
   /** Pour tester sans vraie visio. Corps : { app?, title?, attendees? } */
