@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boîte de réception · Courrier (démo)</title>
+<!-- Client mail fictif et générique pour la démo « Dès que ». Servi par page-demo.ts pour /mail/<id>, qui place les
+     données du mail (expéditeur, objet, corps) en JSON plus bas. Tout texte dynamique passe par textContent.
+     Pastille « Démo » : remet ce mail au moteur via POST /mail/<id>/recevoir (aucun envoi réel).
+     ?etat=arrive : affiche directement l'état « mail arrivé », sans animation ni envoi (captures).
+     ?etat=repetition : joue l'arrivée animée, sans rien remettre au moteur (répétition de la vidéo). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --fond: #f2f2f0; --panneau: #fff; --filet: #e6e6e3; --filet-doux: #efefed; --survol: #f6f6f4;
+    --encre: #18181b; --texte: #3f3f46; --doux: #71717a; --pale: #a1a1aa;
+    --accent: #5b5bd6; --accent-doux: #eeeefd; --accent-texte: #4646b4;
+    --rayon: 12px; color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 400 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--encre); background: var(--fond); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  button { font: inherit; color: inherit; }
+  .cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ico { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  .appli { display: grid; grid-template-columns: 236px minmax(0, 404px) minmax(0, 1fr); gap: 8px; height: 100vh; padding: 8px 8px 8px 0; }
+
+  /* Colonne des dossiers */
+  .dossiers { display: flex; flex-direction: column; min-height: 0; padding: 8px 12px 10px 16px; }
+  .appli-nom { display: flex; align-items: center; gap: 10px; height: 40px; margin-bottom: 12px; font-weight: 600; font-size: 15px; letter-spacing: -.01em; }
+  .appli-logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(160deg, #2a2a33, #111114); color: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .2), inset 0 1px 0 rgb(255 255 255 / .12); }
+  .appli-logo .ico { width: 16px; height: 16px; stroke-width: 1.9; }
+  .appli-nom .tag { margin-left: auto; padding: 2px 7px; border-radius: 99px; background: #e8e8e5; color: var(--doux); font-size: 10.5px; font-weight: 500; letter-spacing: .02em; }
+  .composer { display: flex; align-items: center; justify-content: center; gap: 8px; height: 38px; margin-bottom: 16px; border-radius: 10px; background: var(--encre); color: #fff; font-weight: 500; font-size: 13.5px; box-shadow: 0 1px 2px rgb(0 0 0 / .18), inset 0 1px 0 rgb(255 255 255 / .1); }
+  .composer .ico { width: 16px; height: 16px; }
+  .nav { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
+  .nav li { display: flex; align-items: center; gap: 11px; height: 34px; padding: 0 10px; border-radius: 8px; color: var(--texte); font-size: 13.5px; }
+  .nav li .ico { color: #8a8a93; }
+  .nav li.actif { background: var(--panneau); color: var(--encre); font-weight: 500; box-shadow: 0 0 0 1px var(--filet), 0 1px 2px rgb(0 0 0 / .04); }
+  .nav li.actif .ico { color: var(--encre); }
+  .nav .nombre { margin-left: auto; font-size: 12px; color: var(--pale); font-variant-numeric: tabular-nums; }
+  .nav li.actif .nombre { color: var(--accent-texte); font-weight: 600; }
+  .nombre.saute { animation: saute .55s cubic-bezier(.3, 1.6, .5, 1); }
+  @keyframes saute { 40% { transform: scale(1.35); } }
+  .section-titre { margin: 22px 10px 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--pale); }
+  .pastille { width: 8px; height: 8px; margin: 0 5px; border-radius: 3px; background: var(--e); }
+  .compte { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 10px; border-radius: 10px; }
+  .compte-nom { font-size: 13px; font-weight: 500; }
+  .compte-adresse { font-size: 12px; color: var(--doux); }
+  .fictif { margin: 8px 10px 0; font-size: 11px; color: var(--pale); }
+
+  /* Panneaux */
+  .liste, .lecture { display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--panneau); border: 1px solid var(--filet); border-radius: var(--rayon); box-shadow: 0 1px 2px rgb(0 0 0 / .03); }
+  .liste-tete { padding: 16px 18px 12px; border-bottom: 1px solid var(--filet-doux); }
+  .liste-titre { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .liste-titre .ico { color: var(--pale); }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.015em; }
+  .liste-compte { margin-top: 2px; font-size: 12px; color: var(--doux); }
+  .recherche { display: flex; align-items: center; gap: 8px; height: 36px; margin-top: 12px; padding: 0 10px; border-radius: 9px; background: #f4f4f2; color: var(--pale); font-size: 13px; }
+  .recherche .ico { width: 16px; height: 16px; }
+  .recherche kbd { margin-left: auto; padding: 1px 6px; border: 1px solid var(--filet); border-radius: 5px; background: #fff; font: 500 11px Inter, sans-serif; color: var(--pale); }
+  .onglets { display: flex; gap: 4px; margin-top: 12px; }
+  .onglets span { padding: 5px 10px; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: var(--doux); }
+  .onglets .actif { background: var(--accent-doux); color: var(--accent-texte); }
+  .liste-defile { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 12px; }
+  .groupe-titre { margin: 12px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--pale); }
+  .lignes { margin: 0; padding: 0; list-style: none; }
+
+  /* Une ligne de la liste (l'enveloppe anime la hauteur à l'arrivée) */
+  .ligne-env { display: grid; grid-template-rows: 1fr; }
+  .ligne-env.fermee { grid-template-rows: 0fr; }
+  .ligne-env.s-ouvre { transition: grid-template-rows .5s cubic-bezier(.2, .8, .2, 1); }
+  .ligne-int { min-height: 0; overflow: hidden; }
+  .ligne { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; width: 100%; padding: 11px 12px 12px 16px; border: 0; border-radius: 10px; background: transparent; text-align: left; cursor: pointer; }
+  .ligne:hover { background: var(--survol); }
+  .ligne:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .ligne.choisie { background: var(--accent-doux); }
+  .ligne.choisie::before { content: ""; position: absolute; left: 3px; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; background: var(--accent); }
+  .ligne + .ligne, .ligne-env + .ligne-env .ligne { margin-top: 1px; }
+  .ligne.nouvelle { animation: lueur 2.6s ease-out; }
+  .ligne.nouvelle .ligne-contenu { animation: glisse .6s cubic-bezier(.2, .8, .2, 1) both .12s; }
+  @keyframes lueur { 0% { background: color-mix(in oklab, var(--accent) 16%, #fff); } 100% { background: var(--accent-doux); } }
+  @keyframes glisse { from { opacity: 0; transform: translateY(-10px); } }
+  .ligne-contenu { display: contents; }
+  .avatar { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: color-mix(in oklab, var(--teinte, #888) 17%, #fff); color: color-mix(in oklab, var(--teinte, #888) 78%, #000); font-weight: 600; font-size: 14px; }
+  .non-lu-point { position: absolute; left: 5px; top: 22px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .ligne.choisie .non-lu-point { left: 9px; }
+  .ligne.nouvelle .non-lu-point { animation: eclot .7s cubic-bezier(.3, 1.6, .5, 1) both .35s; }
+  .ligne.nouvelle .non-lu-point::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1.5px solid var(--accent); opacity: 0; animation: onde 1.3s ease-out .5s 2; }
+  @keyframes eclot { from { transform: scale(0); } }
+  @keyframes onde { 0% { transform: scale(.5); opacity: .8; } 100% { transform: scale(1.9); opacity: 0; } }
+  .ligne-texte { min-width: 0; }
+  .ligne-haut { display: flex; align-items: baseline; gap: 8px; }
+  .ligne-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; color: var(--texte); }
+  .ligne-heure { font-size: 12px; color: var(--pale); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ligne-objet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; font-size: 13.5px; color: var(--texte); }
+  .ligne-apercu { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 2px; font-size: 13px; line-height: 1.42; color: var(--doux); }
+  .ligne.non-lue .ligne-nom, .ligne.non-lue .ligne-objet { color: var(--encre); font-weight: 600; }
+  .ligne.non-lue .ligne-heure { color: var(--accent-texte); font-weight: 500; }
+  .ligne-meta { display: flex; gap: 6px; margin-top: 7px; }
+  .etiquette { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 6px; background: color-mix(in oklab, var(--e, #888) 11%, #fff); color: color-mix(in oklab, var(--e, #888) 75%, #000); font-size: 11.5px; font-weight: 500; }
+  .etiquette::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--e, #888); }
+
+  /* Volet de lecture */
+  .lecture { position: relative; }
+  .vide { display: grid; place-content: center; justify-items: center; gap: 6px; height: 100%; padding: 24px; text-align: center; transition: opacity .3s ease; }
+  .vide svg { width: 220px; height: auto; margin-bottom: 14px; }
+  .vide-titre { font-size: 15px; font-weight: 600; }
+  .vide-texte { max-width: 30ch; font-size: 13px; color: var(--doux); }
+  .vide-touches { margin-top: 14px; font-size: 12px; color: var(--pale); }
+  .vide-touches kbd { padding: 1px 6px; border: 1px solid var(--filet); border-radius: 5px; font: 500 11px Inter, sans-serif; }
+  .message { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .message.entre { animation: entre .5s cubic-bezier(.2, .8, .2, 1); }
+  @keyframes entre { from { opacity: 0; transform: translateY(10px); } }
+  .outils { display: flex; align-items: center; gap: 2px; height: 52px; padding: 0 12px 0 14px; border-bottom: 1px solid var(--filet-doux); color: var(--doux); }
+  .outil { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; }
+  .outil:hover { background: var(--survol); }
+  .outils .sep { width: 1px; height: 18px; margin: 0 6px; background: var(--filet); }
+  .outils .position { margin-left: auto; margin-right: 6px; font-size: 12px; color: var(--pale); font-variant-numeric: tabular-nums; }
+  .message-defile { flex: 1; min-height: 0; overflow-y: auto; padding: 26px 40px 28px; }
+  .message-objet { margin: 0; max-width: 34em; font-size: 23px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; text-wrap: balance; }
+  .message-etiquettes { display: flex; gap: 6px; margin-top: 10px; }
+  .message-tete { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 12px; align-items: center; margin-top: 22px; padding-bottom: 20px; border-bottom: 1px solid var(--filet-doux); }
+  .message-tete .avatar { width: 42px; height: 42px; font-size: 16px; }
+  .message-qui { min-width: 0; }
+  .message-nom { font-weight: 600; font-size: 14px; }
+  .message-adresse { margin-left: 6px; font-size: 13px; color: var(--doux); overflow-wrap: anywhere; }
+  .message-a { margin-top: 2px; font-size: 12.5px; color: var(--doux); }
+  .message-date { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--doux); white-space: nowrap; }
+  .message-date .ico { width: 17px; height: 17px; }
+  .message-corps { max-width: 62ch; padding-top: 22px; font-size: 15px; line-height: 1.68; color: #27272a; }
+  .message-corps p { margin: 0 0 1.05em; }
+  .repondre { display: flex; align-items: center; gap: 10px; max-width: 62ch; margin-top: 26px; padding: 12px 12px 12px 16px; border: 1px solid var(--filet); border-radius: 12px; color: var(--pale); font-size: 13.5px; box-shadow: 0 1px 2px rgb(0 0 0 / .03); }
+  .repondre .ico { width: 17px; height: 17px; }
+  .repondre .envoyer { margin-left: auto; padding: 6px 12px; border-radius: 8px; background: #f1f1ef; color: var(--pale); font-weight: 500; font-size: 12.5px; }
+
+  /* Pastille de démonstration (discrète, en bas à droite) */
+  .demo { position: fixed; right: 14px; bottom: 14px; z-index: 20; display: inline-flex; align-items: center; gap: 7px; height: 28px; max-width: calc(100vw - 28px); padding: 0 11px 0 9px; border: 1px solid var(--filet); border-radius: 99px; background: rgb(255 255 255 / .82); color: var(--doux); font-size: 11.5px; font-weight: 500; white-space: nowrap; cursor: pointer; opacity: .72; box-shadow: 0 2px 8px rgb(0 0 0 / .05); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); transition: opacity .2s ease; }
+  .demo:hover, .demo:focus-visible { opacity: 1; }
+  .demo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .demo-signe { width: 7px; height: 7px; border-radius: 50%; background: #c4c4cc; flex: none; }
+  .demo-plus { display: inline-block; max-width: 0; overflow: hidden; vertical-align: bottom; color: var(--pale); transition: max-width .35s ease; }
+  .demo[data-etat="pret"]:hover .demo-plus, .demo[data-etat="pret"]:focus-visible .demo-plus { max-width: 260px; }
+  .demo[data-etat="erreur"] .demo-plus { max-width: 200px; }
+  .demo[data-etat="envoi"] .demo-signe { width: 10px; height: 10px; background: none; border: 1.5px solid #c4c4cc; border-top-color: var(--accent); animation: tourne .8s linear infinite; }
+  .demo[data-etat="remis"] { opacity: .9; cursor: default; }
+  .demo[data-etat="remis"] .demo-signe { background: #16a34a; box-shadow: 0 0 0 3px #dcfce7; }
+  .demo[data-etat="erreur"] { opacity: 1; color: #92400e; border-color: #fcd34d; }
+  .demo[data-etat="erreur"] .demo-signe { background: #f59e0b; }
+  .demo[data-etat="apercu"] { cursor: default; }
+  .demo[data-etat="apercu"] .demo-signe { background: none; border: 1.5px dashed #c4c4cc; width: 9px; height: 9px; }
+  @keyframes tourne { to { transform: rotate(1turn); } }
+
+  @media (max-width: 1180px) {
+    .appli { grid-template-columns: 204px minmax(0, 340px) minmax(0, 1fr); }
+    .section-etiquettes, .compte-adresse { display: none; }
+    .message-defile { padding: 22px 26px; }
+  }
+  @media (max-width: 860px) {
+    .appli { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 100vh; padding: 8px; }
+    .dossiers { display: none; }
+    .liste-defile { overflow: visible; }
+    .lecture { min-height: 70vh; }
+    .message-defile { padding: 20px 18px; }
+    .message-tete { grid-template-columns: 42px minmax(0, 1fr); }
+    .message-date { grid-column: 2; }
+    .outils .position { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition-duration: .01s !important; transition-delay: 0s !important; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-reception" viewBox="0 0 24 24"><path d="M4 13.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4.5"/><path d="M4 13.5 6.6 5.6A2 2 0 0 1 8.5 4.2h7a2 2 0 0 1 1.9 1.4L20 13.5"/><path d="M4 13.5h4.2l1.3 2.5h5l1.3-2.5H20"/></symbol>
+  <symbol id="i-etoile" viewBox="0 0 24 24"><path d="m12 3.8 2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8Z"/></symbol>
+  <symbol id="i-envoye" viewBox="0 0 24 24"><path d="M20.5 3.5 10.2 13.8"/><path d="m20.5 3.5-6.5 17-3.8-6.7-6.7-3.8Z"/></symbol>
+  <symbol id="i-brouillon" viewBox="0 0 24 24"><path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5Z"/><path d="M14 3.5v5h5"/><path d="m9 16 4.5-4.5 1.5 1.5-4.5 4.5H9Z"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1.2"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></symbol>
+  <symbol id="i-corbeille" viewBox="0 0 24 24"><path d="M4.5 6.5h15"/><path d="M9.5 6.5V4.8a1.3 1.3 0 0 1 1.3-1.3h2.4a1.3 1.3 0 0 1 1.3 1.3v1.7"/><path d="m6.5 6.5.9 12.2a1.8 1.8 0 0 0 1.8 1.8h5.6a1.8 1.8 0 0 0 1.8-1.8l.9-12.2"/></symbol>
+  <symbol id="i-indesirable" viewBox="0 0 24 24"><path d="M8.3 3.5h7.4l5.3 5.3v7.4l-5.3 5.3H8.3L3 16.2V8.8Z"/><path d="M12 8v4.6"/><path d="M12 16.2h.01"/></symbol>
+  <symbol id="i-loupe" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="i-crayon" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/></symbol>
+  <symbol id="i-repondre" viewBox="0 0 24 24"><path d="M9.5 6.5 4 12l5.5 5.5"/><path d="M4.5 12H14a6 6 0 0 1 6 6v.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/></symbol>
+  <symbol id="i-haut" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+  <symbol id="i-bas" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-enveloppe" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/></symbol>
+  <symbol id="i-dossier" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="i-filtre" viewBox="0 0 24 24"><path d="M4 6.5h16M7 12h10M10 17.5h4"/></symbol>
+</svg>
+
+<div class="appli">
+  <nav class="dossiers" aria-label="Dossiers (décor)">
+    <div class="appli-nom"><span class="appli-logo"><svg class="ico"><use href="#i-reception"/></svg></span>Courrier<span class="tag">démo</span></div>
+    <div class="composer" aria-hidden="true"><svg class="ico"><use href="#i-crayon"/></svg>Nouveau message</div>
+    <ul class="nav">
+      <li class="actif"><svg class="ico"><use href="#i-reception"/></svg>Boîte de réception<span class="nombre" id="nb-dossier">2</span></li>
+      <li><svg class="ico"><use href="#i-etoile"/></svg>Favoris</li>
+      <li><svg class="ico"><use href="#i-envoye"/></svg>Envoyés</li>
+      <li><svg class="ico"><use href="#i-brouillon"/></svg>Brouillons<span class="nombre">2</span></li>
+      <li><svg class="ico"><use href="#i-archive"/></svg>Archives</li>
+      <li><svg class="ico"><use href="#i-indesirable"/></svg>Indésirables</li>
+      <li><svg class="ico"><use href="#i-corbeille"/></svg>Corbeille</li>
+    </ul>
+    <div class="section-etiquettes">
+      <div class="section-titre">Étiquettes</div>
+      <ul class="nav">
+        <li><span class="pastille" style="--e:#0d9488"></span>Clients</li>
+        <li><span class="pastille" style="--e:#d97706"></span>Production</li>
+        <li><span class="pastille" style="--e:#7c3aed"></span>Factures</li>
+      </ul>
+    </div>
+    <div class="compte">
+      <span class="avatar" style="--teinte:#52525b">V</span>
+      <span><span class="compte-nom">Vous</span><br><span class="compte-adresse">vous@demo.example</span></span>
+    </div>
+    <p class="fictif">Données fictives<br>Démo « Dès que »</p>
+  </nav>
+
+  <section class="liste" aria-labelledby="titre-liste">
+    <header class="liste-tete">
+      <div class="liste-titre"><h1 id="titre-liste">Boîte de réception</h1><svg class="ico" aria-hidden="true"><use href="#i-filtre"/></svg></div>
+      <div class="liste-compte" id="liste-compte"></div>
+      <div class="recherche" aria-hidden="true"><svg class="ico"><use href="#i-loupe"/></svg>Rechercher dans le courrier<kbd>⌘ K</kbd></div>
+      <div class="onglets" aria-hidden="true"><span class="actif">Tous</span><span>Non lus</span><span>Pièces jointes</span></div>
+    </header>
+    <div class="liste-defile" id="liste"></div>
+  </section>
+
+  <main class="lecture" id="lecture">
+    <div class="vide" id="vide">
+      <svg viewBox="0 0 240 170" aria-hidden="true" focusable="false">
+        <ellipse cx="122" cy="152" rx="82" ry="7" fill="#18181b" opacity=".05"/>
+        <g transform="rotate(-8 92 86)"><rect x="40" y="52" width="104" height="70" rx="11" fill="#fff" stroke="#e4e4e7" stroke-width="1.5"/><path d="m48 61 44 32 44-32" fill="none" stroke="#d4d4d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <g transform="rotate(6 150 82)"><rect x="96" y="44" width="110" height="74" rx="11" fill="#fff" stroke="#e4e4e7" stroke-width="1.5"/><path d="m105 53 46 34 46-34" fill="none" stroke="#c9c9f3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <circle cx="194" cy="46" r="17" fill="#5b5bd6"/><path d="m186.5 46.5 5 5 9.5-10" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="vide-titre">Aucun message sélectionné</div>
+      <div class="vide-texte">Votre boîte de réception est à jour. Les nouveaux messages apparaîtront ici.</div>
+      <div class="vide-touches"><kbd>↑</kbd> <kbd>↓</kbd> pour naviguer</div>
+    </div>
+  </main>
+</div>
+
+<button class="demo" id="demo" type="button" data-etat="pret"><span class="demo-signe" aria-hidden="true"></span><span id="demo-texte">Démo</span><span class="demo-plus" id="demo-plus">&nbsp;· faire arriver le mail</span></button>
+<span class="cache" id="annonce" aria-live="polite"></span>
+
+<script type="application/json" id="donnees">__DONNEES_MAIL__</script>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const reduit = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const HEX = /^#[0-9a-f]{6}$/i;
+  let D = null;
+  try { D = JSON.parse($("donnees").textContent); } catch {}
+  const valide = D && typeof D.id === "string" && typeof D.expediteur === "string" && typeof D.objet === "string" && typeof D.corps === "string";
+
+  // Décor : mails fictifs génériques (domaines en .example), datés par rapport à maintenant.
+  const minutes = (n) => new Date(Date.now() - n * 60000);
+  const DECOR = [
+    { nom: "Studio Lumen", adresse: "bonjour@studio-lumen.example", teinte: "#d97706", date: minutes(38), nonLu: true, etiquette: ["Production", "#d97706"],
+      objet: "Sélection finale des photos", corps: "Bonjour,\n\nVoici les 24 images retenues, retouchées et prêtes à l’export. Les fichiers haute définition sont dans le dossier partagé.\n\nBonne journée,\nNina, Studio Lumen" },
+    { nom: "Marc Lefèvre", adresse: "marc.lefevre@demo.example", teinte: "#4f46e5", date: minutes(96), nonLu: true,
+      objet: "Compte rendu de la réunion produit", corps: "Salut,\n\nLes points validés ce matin : calendrier de l’été, budget des échantillons et ordre des prochaines livraisons. Je t’envoie le détail cet après-midi.\n\nMarc" },
+    { nom: "Agenda", adresse: "agenda@demo.example", teinte: "#059669", date: minutes(185),
+      objet: "Rappel : point d’équipe à 15 h", corps: "Point d’équipe hebdomadaire\nSalle Montorgueil · 30 min · 5 participants\n\nOrdre du jour : bilan de la semaine, priorités, questions diverses." },
+    { nom: "Colis Express", adresse: "suivi@colis-express.example", teinte: "#0d9488", date: minutes(60 * 26),
+      objet: "Votre colis a été livré", corps: "Bonjour,\n\nVotre colis n° CE-4821 a été livré à l’accueil à 11 h 02 et signé par N. Petit.\n\nColis Express (service fictif)" },
+    { nom: "Hébergeur Démo", adresse: "factures@hebergeur-demo.example", teinte: "#7c3aed", date: minutes(60 * 31), etiquette: ["Factures", "#7c3aed"],
+      objet: "Facture n° 2026-118 disponible", corps: "Bonjour,\n\nVotre facture mensuelle de 24,00 € est disponible dans votre espace client.\n\nMerci de votre confiance." },
+    { nom: "La Lettre du design", adresse: "lettre@lettre-du-design.example", teinte: "#db2777", date: minutes(60 * 53),
+      objet: "Cinq couleurs pour l’été 2027", corps: "Cette semaine : du rouge coquelicot au bleu Riviera, notre sélection de teintes qui feront la saison, et trois ateliers à suivre." },
+    { nom: "Inès Garnier", adresse: "ines@client-demo.example", teinte: "#0284c7", date: minutes(60 * 77), etiquette: ["Clients", "#0d9488"],
+      objet: "Merci pour la livraison !", corps: "Bonjour,\n\nTout est bien arrivé, l’équipe est ravie. Nous reviendrons vers vous pour la prochaine commande.\n\nInès" },
+  ];
+
+  // Dates à la française
+  const jour = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const ecart = (d) => Math.round((jour(new Date()) - jour(d)) / 86400000);
+  const hm = (d) => d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const majuscule = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const heureListe = (d) => ecart(d) === 0 ? hm(d) : ecart(d) === 1 ? "Hier" : majuscule(d.toLocaleDateString("fr-FR", { weekday: "short" }));
+  const dateLongue = (d) => ecart(d) === 0 ? `Aujourd’hui, ${hm(d)}` : ecart(d) === 1 ? `Hier, ${hm(d)}` : `${majuscule(d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }))}, ${hm(d)}`;
+  const groupe = (d) => ecart(d) === 0 ? "Aujourd’hui" : ecart(d) === 1 ? "Hier" : "Cette semaine";
+
+  function el(tag, classe, texte) {
+    const n = document.createElement(tag);
+    if (classe) n.className = classe;
+    if (texte != null) n.textContent = texte;
+    return n;
+  }
+  function icone(nom, classe = "ico") {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", classe);
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#i-${nom}`);
+    svg.append(use);
+    return svg;
+  }
+  function avatar(m) {
+    const a = el("span", "avatar", (m.initiale || m.nom || "?").trim().charAt(0).toUpperCase());
+    if (HEX.test(m.teinte ?? "")) a.style.setProperty("--teinte", m.teinte);
+    return a;
+  }
+  function etiquette(nom, couleur) {
+    const e = el("span", "etiquette", nom);
+    if (HEX.test(couleur ?? "")) e.style.setProperty("--e", couleur);
+    return e;
+  }
+  const apercu = (corps) => corps.replace(/\s+/g, " ").trim();
+
+  // Liste
+  const liste = $("liste");
+  const messages = DECOR.map((m) => ({ ...m }));
+  let choisi = null;
+
+  function ligne(m) {
+    const env = el("li", "ligne-env");
+    const int = el("div", "ligne-int");
+    const b = el("button", "ligne" + (m.nonLu ? " non-lue" : ""));
+    b.type = "button";
+    const contenu = el("span", "ligne-contenu");
+    const texte = el("span", "ligne-texte");
+    const haut = el("span", "ligne-haut");
+    haut.append(el("span", "ligne-nom", m.nom), el("span", "ligne-heure", heureListe(m.date)));
+    texte.append(haut, el("span", "ligne-objet", m.objet), el("span", "ligne-apercu", apercu(m.corps)));
+    if (m.etiquette) { const meta = el("span", "ligne-meta"); meta.append(etiquette(...m.etiquette)); texte.append(meta); }
+    if (m.nonLu) b.append(el("span", "non-lu-point"));
+    contenu.append(avatar(m), texte);
+    b.append(contenu);
+    b.addEventListener("click", () => {
+      ouvrir(m);
+      if (matchMedia("(max-width: 860px)").matches) $("lecture").scrollIntoView({ behavior: reduit ? "auto" : "smooth", block: "start" });
+    });
+    int.append(b);
+    env.append(int);
+    m.ligne = b;
+    return env;
+  }
+  function groupes() {
+    liste.replaceChildren();
+    const parGroupe = new Map();
+    for (const m of [...messages].sort((a, b) => b.date - a.date)) {
+      const g = groupe(m.date);
+      if (!parGroupe.has(g)) parGroupe.set(g, []);
+      parGroupe.get(g).push(m);
+    }
+    for (const [titre, ms] of parGroupe) {
+      const bloc = el("div", "groupe");
+      bloc.dataset.groupe = titre;
+      const ul = el("ul", "lignes");
+      ms.forEach((m) => ul.append(ligne(m)));
+      bloc.append(el("div", "groupe-titre", titre), ul);
+      liste.append(bloc);
+    }
+  }
+  function compteurs(saut) {
+    const nonLus = messages.filter((m) => m.nonLu).length;
+    const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
+    $("liste-compte").textContent = `${pluriel(messages.length, "message")} · ${pluriel(nonLus, "non lu")} · données fictives`;
+    const nb = $("nb-dossier");
+    nb.textContent = String(nonLus);
+    if (saut && !reduit) { nb.classList.remove("saute"); void nb.offsetWidth; nb.classList.add("saute"); }
+    document.title = `${nonLus ? `(${nonLus}) ` : ""}Boîte de réception · Courrier (démo)`;
+  }
+
+  // Volet de lecture
+  function ouvrir(m, garderNonLu = false, anime = true) {
+    if (choisi?.ligne) choisi.ligne.classList.remove("choisie");
+    choisi = m;
+    m.ligne?.classList.add("choisie");
+    if (!garderNonLu && m.nonLu) {
+      m.nonLu = false;
+      m.ligne?.classList.remove("non-lue");
+      m.ligne?.querySelector(".non-lu-point")?.remove();
+      compteurs(false);
+    }
+    const article = el("article", anime ? "message entre" : "message");
+    const outils = el("div", "outils");
+    outils.setAttribute("aria-hidden", "true");
+    for (const [nom, i] of [["archive", 0], ["corbeille", 0], ["enveloppe", 0], ["dossier", 1], ["plus", 0]]) {
+      if (i) outils.append(el("span", "sep"));
+      const o = el("span", "outil");
+      o.append(icone(nom));
+      outils.append(o);
+    }
+    const tries = [...messages].sort((a, b) => b.date - a.date);
+    const pos = el("span", "position", `${tries.indexOf(m) + 1} sur ${messages.length}`);
+    const haut = el("span", "outil"); haut.append(icone("haut"));
+    const bas = el("span", "outil"); bas.append(icone("bas"));
+    outils.append(pos, haut, bas);
+
+    const defile = el("div", "message-defile");
+    const etiquettes = el("div", "message-etiquettes");
+    etiquettes.append(etiquette("Boîte de réception", "#71717a"));
+    if (m.etiquette) etiquettes.append(etiquette(...m.etiquette));
+    const tete = el("div", "message-tete");
+    const qui = el("div", "message-qui");
+    const ligneNom = el("div");
+    ligneNom.append(el("span", "message-nom", m.nom), el("span", "message-adresse", `<${m.adresse}>`));
+    qui.append(ligneNom, el("div", "message-a", "à moi"));
+    const date = el("div", "message-date", dateLongue(m.date));
+    date.append(icone("etoile"), icone("repondre"));
+    tete.append(avatar(m), qui, date);
+    const corps = el("div", "message-corps");
+    for (const para of m.corps.split(/\n{2,}/)) {
+      const p = el("p");
+      para.split("\n").forEach((l, i) => { if (i) p.append(el("br")); p.append(document.createTextNode(l)); });
+      corps.append(p);
+    }
+    const repondre = el("div", "repondre");
+    repondre.setAttribute("aria-hidden", "true");
+    repondre.append(icone("repondre"), el("span", null, `Répondre à ${m.nom}…`), el("span", "envoyer", "Envoyer"));
+    defile.append(el("h2", "message-objet", m.objet), etiquettes, tete, corps, repondre);
+    article.append(outils, defile);
+    $("lecture").replaceChildren(article);
+  }
+
+  // Arrivée du mail de la démo
+  const demo = $("demo");
+  let arrive = false;
+  function etatDemo(etat, texte, plus = "") {
+    demo.dataset.etat = etat;
+    $("demo-texte").textContent = texte;
+    $("demo-plus").textContent = plus;
+    $("annonce").textContent = texte;
+  }
+  async function remettre() {
+    etatDemo("envoi", "Remise au moteur…");
+    try {
+      const r = await fetch(`/mail/${encodeURIComponent(D.id)}/recevoir`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const j = await r.json().catch(() => ({}));
+      demo.title = typeof j.erreur === "string" ? j.erreur : "";
+      return r.ok ? { ok: true } : { ok: false, texte: r.status === 502 ? "Moteur injoignable" : `Erreur ${r.status}` };
+    } catch {
+      return { ok: false, texte: "Page de démo injoignable" };
+    }
+  }
+  function afficherResultat(res) {
+    if (res.ok) etatDemo("remis", "Remis au moteur Dès que");
+    else etatDemo("erreur", res.texte, "\u00a0· réessayer");
+  }
+  function faireArriver(envoyer, anime) {
+    if (arrive || !valide) return;
+    arrive = true;
+    const debut = performance.now();
+    const envoi = envoyer ? remettre() : null;
+    if (!envoyer) etatDemo("apercu", "Aperçu · rien n’a été envoyé au moteur");
+    const adresse = /<([^>]+)>/.exec(D.expediteur)?.[1] ?? D.expediteur;
+    const m = { nom: D.nom || D.expediteur, adresse, initiale: D.initiale, teinte: D.teinte, objet: D.objet, corps: D.corps, date: new Date(), nonLu: true };
+    messages.push(m);
+    let bloc = liste.querySelector('[data-groupe="Aujourd’hui"]');
+    if (!bloc) {
+      bloc = el("div", "groupe");
+      bloc.dataset.groupe = "Aujourd’hui";
+      bloc.append(el("div", "groupe-titre", "Aujourd’hui"), el("ul", "lignes"));
+      liste.prepend(bloc);
+    }
+    const env = ligne(m);
+    if (anime) { env.classList.add("fermee"); m.ligne.classList.add("nouvelle"); }
+    bloc.querySelector(".lignes").prepend(env);
+    liste.scrollTop = 0;
+    if (anime) { void env.offsetWidth; env.classList.add("s-ouvre"); env.classList.remove("fermee"); }
+    compteurs(anime);
+    if (anime) setTimeout(() => ouvrir(m, true), 950);
+    else ouvrir(m, true, false);
+    if (envoi) envoi.then((res) => setTimeout(() => afficherResultat(res), Math.max(0, 1300 - (performance.now() - debut))));
+  }
+  demo.addEventListener("click", async () => {
+    if (!valide) return;
+    if (demo.dataset.etat === "pret") faireArriver(true, !reduit);
+    else if (demo.dataset.etat === "erreur") afficherResultat(await remettre());
+  });
+
+  groupes();
+  compteurs(false);
+  if (!valide) etatDemo("erreur", "Données du mail illisibles");
+  else {
+    demo.title = `Démo : fait arriver le mail de ${D.nom || D.expediteur} et le remet au moteur Dès que (aucun envoi réel).`;
+    $("demo-plus").textContent = `\u00a0· faire arriver le mail de ${(D.nom || "").split(" ")[0] || "démo"}`;
+    const etat = new URLSearchParams(location.search).get("etat");
+    if (etat === "arrive") faireArriver(false, false);
+    else if (etat === "repetition") setTimeout(() => faireArriver(false, !reduit), 700);
+  }
+})();
+</script>
+</body>
+</html>

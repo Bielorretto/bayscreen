@@ -50,38 +50,10 @@ const MAILS: Record<string, MailDemo> = {
   },
 };
 const PORT_MOTEUR = Number(process.env.PORT_MOTEUR ?? 4300);
-const echapper = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
-const pageMail = (id: string, m: MailDemo) => `<!doctype html>
-<html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Boîte de réception · démo</title>
-<body style="margin: 0; font-family: system-ui, sans-serif; background: #f4f4f5; color: #18181b">
-<div style="max-width: 44rem; margin: 2.5rem auto; padding: 0 1rem">
-  <div style="font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: #71717a">Boîte de réception · données fictives</div>
-  <article style="background: #fff; border: 1px solid #e4e4e7; border-radius: 14px; padding: 1.5rem; margin-top: .8rem">
-    <h1 style="font-size: 1.35rem; margin: 0 0 1rem">${echapper(m.objet)}</h1>
-    <div style="display: flex; gap: .8rem; align-items: center; margin-bottom: 1.2rem">
-      <div style="width: 2.4rem; height: 2.4rem; border-radius: 50%; background: ${m.teinte}; color: #fff; display: grid; place-items: center; font-weight: 600">${echapper(m.initiale)}</div>
-      <div><div>${echapper(m.expediteur)}</div><div style="color: #71717a; font-size: .9rem">à moi · aujourd'hui</div></div>
-    </div>
-    ${m.corps.split("\n\n").map((para) => `<p>${echapper(para).replace(/\n/g, "<br>")}</p>`).join("\n    ")}
-  </article>
-  <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem; flex-wrap: wrap">
-    <button id="recevoir" style="font: inherit; padding: .6rem 1rem; border-radius: 8px; border: 1px solid #18181b; background: #18181b; color: #fff; cursor: pointer">Faire arriver ce mail (démo)</button>
-    <span id="resultat" style="color: #71717a"></span>
-  </div>
-</div>
-<script>
-  document.getElementById("recevoir").onclick = async () => {
-    const out = document.getElementById("resultat");
-    out.textContent = "…";
-    try {
-      const r = await fetch("/mail/${id}/recevoir", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      const j = await r.json().catch(() => ({}));
-      out.textContent = r.ok ? "Mail remis au moteur Dès que." : "Erreur : " + (j.erreur ?? r.status);
-    } catch (e) { out.textContent = "Erreur : " + e.message; }
-  };
-</script>
-</body></html>`;
+// Client mail fictif : gabarit scripts/mail.html, relu à chaque requête (modifiable sans redémarrer), données du mail
+// placées en JSON dans la page ; « < » échappé pour que le JSON ne puisse pas fermer la balise <script> qui le porte.
+const pageMail = async (id: string, m: MailDemo) =>
+  (await Bun.file(`${import.meta.dir}/mail.html`).text()).replace("__DONNEES_MAIL__", () => JSON.stringify({ id, ...m }).replace(/</g, "\\u003c"));
 
 const json415 = () => Response.json({ erreur: "JSON attendu" }, { status: 415 });
 const enJson = (req: Request) => (req.headers.get("content-type") ?? "").startsWith("application/json");
@@ -125,7 +97,7 @@ Bun.serve({
     const mail = url.pathname.match(/^\/mail\/(\w+)(\/recevoir)?$/);
     if (mail && Object.hasOwn(MAILS, mail[1]!)) {
       const m = MAILS[mail[1]!]!;
-      if (!mail[2]) return new Response(pageMail(mail[1]!, m), { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      if (!mail[2]) return new Response(await pageMail(mail[1]!, m), { headers: { "Content-Type": "text/html; charset=utf-8" } });
       if (req.method !== "POST" || !enJson(req)) return json415();
       const { expediteur, objet, corps } = m;
       const r = await fetch(`http://127.0.0.1:${PORT_MOTEUR}/api/evenements`, {

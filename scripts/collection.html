@@ -1,94 +1,703 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" class="demarrage">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Collection Été 2027 · Atelier Démo</title>
+<!-- Scénario « designeuse » (données fictives). La couleur vient de GET /collection/etat, relevé chaque seconde ;
+     seule une automatisation la change (POST /collection/couleur). Tout texte venu du serveur passe par textContent. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
 <style>
-  :root { --couleur: #2563eb; --fond: #f7f5f2; --texte: #1c1917; --doux: #78716c; --carte: #ffffff; --bord: #e7e5e4; }
+  @property --avancee { syntax: "<number>"; inherits: true; initial-value: 0; }
+  :root {
+    --t: #2563eb; --t-texte: #2563eb;
+    --papier: #f3ede4; --encre: #1c1815; --doux: #6e655b; --pale: #9a9086; --filet: #dcd3c6;
+    --serif: "Instrument Serif", "Iowan Old Style", "Times New Roman", serif;
+    --sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --marge: clamp(16px, 3.9vw, 56px);
+    --duree: 1.6s;
+    color-scheme: light;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fond); color: var(--texte); }
-  header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 2rem clamp(1rem, 4vw, 3rem) 1rem; }
-  .marque { font-size: .8rem; letter-spacing: .18em; text-transform: uppercase; color: var(--doux); }
-  h1 { margin: .3rem 0 0; font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 600; letter-spacing: -.02em; }
-  .etat { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--doux); }
-  .pastille { width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--couleur); transition: background .8s ease; box-shadow: 0 0 0 3px #fff, 0 0 0 4px var(--bord); }
-  .direct::before { content: ""; display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: #16a34a; margin-right: .35rem; animation: pouls 1.6s infinite; }
-  @keyframes pouls { 50% { opacity: .25; } }
-  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 1rem; padding: 1rem clamp(1rem, 4vw, 3rem) 3rem; }
-  .modele { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 1.2rem 1.2rem 1rem; }
-  .modele svg { width: 100%; height: auto; display: block; }
-  .cuir { fill: var(--couleur); transition: fill .8s ease; }
-  .semelle { fill: #e7e5e4; }
-  .detail { fill: none; stroke: #ffffffcc; stroke-width: 2.2; stroke-linecap: round; }
-  .nom { margin: .8rem 0 .1rem; font-weight: 600; }
-  .prix { color: var(--doux); font-size: .9rem; }
-  #toast { position: fixed; left: 50%; bottom: 1.5rem; transform: translate(-50%, 2rem); opacity: 0; transition: all .4s ease; background: var(--texte); color: #fff; padding: .8rem 1.1rem; border-radius: 10px; font-size: .95rem; max-width: calc(100% - 2rem); }
-  #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; min-height: 100vh; overflow-x: hidden;
+    font: 400 15px/1.5 var(--sans); color: var(--encre); -webkit-font-smoothing: antialiased;
+    background-color: color-mix(in oklab, var(--t) 3%, var(--papier));
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .1 0 0 0 0 .08 0 0 0 0 .06 0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    transition: background-color 1.6s ease;
+  }
+  /* Premier affichage sans transition : l'état initial s'applique d'un coup. */
+  .demarrage *, .demarrage *::before, .demarrage *::after { transition: none !important; }
+  .defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* Bandeau */
+  .bandeau { display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 68px; padding: 0 var(--marge); border-bottom: 1px solid var(--filet); }
+  .marque { display: flex; align-items: baseline; gap: 14px; white-space: nowrap; }
+  .marque-nom { font: 400 27px/1 var(--serif); letter-spacing: -.01em; }
+  .marque-nom em { font-style: italic; }
+  .marque-lieu { font-size: 10.5px; letter-spacing: .26em; text-transform: uppercase; color: var(--doux); }
+  .rubriques { display: flex; gap: 30px; font-size: 13px; color: var(--doux); }
+  .rubriques .ici { color: var(--encre); box-shadow: inset 0 -1px 0 currentColor; padding-bottom: 3px; }
+  .bandeau-droite { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
+  .fictif { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--pale); }
+  .direct { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 10px; border: 1px solid var(--filet); border-radius: 99px; font-size: 12px; font-weight: 500; letter-spacing: .02em; background: color-mix(in oklab, #fff 55%, transparent); }
+  .direct-point { position: relative; width: 7px; height: 7px; border-radius: 50%; background: #1f9d55; }
+  .direct-point::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1px solid #1f9d55; opacity: 0; animation: onde 2s ease-out infinite; }
+  .direct.hors-ligne .direct-point { background: #b8aea3; }
+  .direct.hors-ligne .direct-point::after { display: none; }
+  @keyframes onde { 0% { transform: scale(.4); opacity: .7; } 100% { transform: scale(1.5); opacity: 0; } }
+
+  /* Mise en page */
+  main {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+    grid-template-areas: "titre intro" "titre provenance" "grille grille";
+    column-gap: clamp(32px, 5vw, 88px); padding: 0 var(--marge);
+  }
+  .bloc-titre { grid-area: titre; padding-top: 38px; align-self: end; }
+  .surtitre { margin: 0 0 18px; font-size: 11px; letter-spacing: .24em; text-transform: uppercase; color: var(--doux); }
+  .surtitre span { color: var(--pale); }
+  h1 { margin: 0; font: 400 clamp(2.45rem, 7vw, 6.2rem)/.94 var(--serif); letter-spacing: -.022em; }
+  .coloris-ligne { display: block; white-space: nowrap; }
+  #coloris-titre { display: inline-block; font-style: italic; color: var(--t-texte); padding-right: .06em; }
+  .chapeau { grid-area: intro; align-self: end; margin: 0; padding-top: 38px; max-width: 40ch; color: var(--doux); font-size: 14.5px; line-height: 1.6; text-wrap: pretty; }
+  .chapeau strong { font-weight: 500; color: var(--encre); }
+
+  /* Nuancier */
+  .nuancier { display: flex; align-items: center; gap: 18px; margin-top: 26px; flex-wrap: wrap; }
+  .nuancier-titre { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--doux); }
+  .pastilles { display: flex; gap: 9px; margin: 0; padding: 0; list-style: none; }
+  .pastille { position: relative; width: 19px; height: 19px; border-radius: 50%; background: var(--p); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .12), inset 0 2px 3px rgb(255 255 255 / .28); }
+  .pastille::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1px solid var(--encre); opacity: 0; transform: scale(.7); transition: opacity .45s ease, transform .55s cubic-bezier(.2, .8, .2, 1); }
+  .pastille[aria-current="true"]::after { opacity: 1; transform: none; }
+  .nuancier-nom { font: italic 400 19px/1 var(--serif); color: var(--encre); }
+
+  /* Encart de provenance */
+  .provenance { grid-area: provenance; align-self: end; position: relative; margin-top: 22px; padding: 18px 20px 16px; border: 1px solid var(--filet); border-radius: 10px; background: color-mix(in oklab, #fff 62%, transparent); overflow: hidden; }
+  .provenance::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--t-texte); transition: background-color 1.1s ease; }
+  .prov-libelle { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 10.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--doux); }
+  .goutte { width: 12px; height: 15px; fill: var(--t-texte); transition: fill 1.1s ease; }
+  .prov-statut { font-size: 11.5px; color: var(--doux); white-space: nowrap; }
+  .prov-statut::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #1f9d55; vertical-align: 1px; }
+  .provenance.en-cours .prov-statut::before { background: var(--t); animation: clignote .7s ease-in-out infinite alternate; }
+  @keyframes clignote { to { opacity: .25; } }
+  .prov-titre { margin: 0; font: 400 25px/1.1 var(--serif); }
+  .prov-detail { margin: 6px 0 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+  .prov-pied { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--filet); font-size: 12px; color: var(--doux); }
+  .provenance.vient { animation: halo 1.6s ease-out; }
+  .provenance.vient .prov-ligne { animation: monte .7s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--k) * 90ms); }
+  @keyframes halo { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--t) 40%, transparent); } 100% { box-shadow: 0 0 0 18px transparent; } }
+  @keyframes monte { from { opacity: 0; transform: translateY(8px); } }
+
+  /* Grille des modèles */
+  .grille { grid-area: grille; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; margin: 34px 0 0; padding: 0; }
+  .modele { margin: 0; }
+  .scene {
+    position: relative; aspect-ratio: 1.25; border-radius: 6px; overflow: hidden; isolation: isolate;
+    background-color: color-mix(in oklab, var(--t) 6%, #ede5d9);
+    transition: --avancee var(--duree) cubic-bezier(.65, 0, .3, 1) calc(var(--i) * .16s), background-color 1.4s ease calc(var(--i) * .16s + .25s);
+    opacity: 0;
+  }
+  .pret .scene { opacity: 1; }
+  .scene.sans-transition { transition: none; }
+  .scene::before { content: ""; position: absolute; inset: 0; background: radial-gradient(90% 75% at 50% 38%, rgb(255 255 255 / .7), rgb(255 255 255 / 0) 70%); pointer-events: none; }
+  .scene::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: linear-gradient(rgb(0 0 0 / 0), rgb(60 40 20 / .05)); pointer-events: none; }
+  .scene-num, .scene-matiere { position: absolute; top: 14px; z-index: 2; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--doux); }
+  .scene-num { left: 16px; }
+  .scene-matiere { right: 16px; color: var(--pale); }
+  .calque { position: absolute; left: -1%; right: -1%; bottom: 9%; aspect-ratio: 1.6; z-index: 1; --cuir: #2563eb; --fil: #e3e9f7; }
+  .calque svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .calque-voile {
+    will-change: transform;
+    -webkit-mask-image: linear-gradient(100deg, #000 calc(var(--avancee) * 130% - 27%), transparent calc(var(--avancee) * 130% - 3%));
+    mask-image: linear-gradient(100deg, #000 calc(var(--avancee) * 130% - 27%), transparent calc(var(--avancee) * 130% - 3%));
+  }
+  .lueur { opacity: 0; transition: opacity .4s ease; transform: translateX(calc(var(--avancee) * 577px - 89px)); }
+  .en-teinture .lueur { opacity: 1; }
+  .calque-lueur { mix-blend-mode: soft-light; pointer-events: none; }
+  figcaption { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; padding: 14px 2px 0; }
+  .modele-nom { font: 400 26px/1 var(--serif); }
+  .modele-prix { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; align-self: end; }
+  .modele-type { grid-column: 1 / -1; margin-top: 7px; font-size: 13px; color: var(--doux); }
+  .modele-coloris { display: inline-flex; align-items: center; gap: 7px; }
+  .modele-coloris::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c-legende, var(--t)); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .14); transition: background-color .5s ease; }
+
+  /* Fil de teinture en haut de page */
+  .barre { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: var(--t); transform: scaleX(0); transform-origin: 0 50%; z-index: 10; pointer-events: none; }
+
+  footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 30px; padding: 16px var(--marge) 22px; border-top: 1px solid var(--filet); font-size: 11.5px; color: var(--pale); }
+
+  /* Teintes des chaussures : tout dérive de --cuir (posée sur chaque calque) */
+  .chaussure .c { fill: var(--cuir); }
+  .chaussure .c2 { fill: color-mix(in oklab, var(--cuir) 74%, #1b130d); }
+  .chaussure .c3 { fill: color-mix(in oklab, var(--cuir) 82%, #fff7ec); }
+  .chaussure .c4 { fill: color-mix(in oklab, var(--cuir) 40%, #150e0a); }
+  .chaussure .clair-doux { fill: #fff; fill-opacity: .07; }
+  .chaussure .lumiere { fill: url(#g-lumiere); }
+  .chaussure .ombre-bord { fill: none; stroke: #140c06; stroke-opacity: .28; stroke-width: 3.2; filter: url(#f-flou-fin); }
+  .chaussure .doublure { fill: color-mix(in oklab, var(--cuir) 22%, #5b4d41); }
+  .chaussure .doublure-fauve { fill: color-mix(in oklab, var(--cuir) 10%, #b98d64); }
+  .chaussure .elastique { fill: color-mix(in oklab, var(--cuir) 22%, #1d1916); }
+  .chaussure .couture { fill: none; stroke: var(--fil); stroke-width: 1; stroke-dasharray: 2.6 2.1; stroke-linecap: round; }
+  .chaussure .points { fill: none; stroke: #ecdcc6; stroke-opacity: .65; stroke-width: 1.25; stroke-dasharray: 0 3.6; stroke-linecap: round; }
+  .chaussure .points-moc { fill: none; stroke: var(--fil); stroke-width: 4.2; stroke-dasharray: 1.1 3.3; }
+  .chaussure .perfo { fill: none; stroke: color-mix(in oklab, var(--cuir) 30%, #120b07); stroke-width: 1.8; stroke-dasharray: 0 4.3; stroke-linecap: round; }
+  .chaussure .bord { fill: none; stroke: color-mix(in oklab, var(--cuir) 70%, #1b130d); stroke-width: 4.4; }
+  .chaussure .trait { fill: none; stroke: color-mix(in oklab, var(--cuir) 55%, #140d09); stroke-width: 1.1; stroke-linecap: round; }
+  .chaussure .trait-clair { fill: none; stroke: #fff; stroke-opacity: .3; stroke-width: 1.1; stroke-linecap: round; }
+  .chaussure .lacet, .chaussure .lacet-ombre { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .chaussure .lacet { stroke: #f7f2e8; stroke-width: 3; }
+  .chaussure .lacet-ombre { stroke: #1d140d; stroke-opacity: .34; stroke-width: 4.5; }
+  .chaussure .noeud { fill: #f7f2e8; stroke: #1d140d; stroke-opacity: .3; stroke-width: .8; }
+  .chaussure .ferret { fill: none; stroke: #3d342d; stroke-width: 2.6; stroke-linecap: round; }
+  .chaussure .oeillet { fill: #e6ded0; stroke: #6c6358; stroke-width: .7; }
+  .chaussure .trou { fill: #251c16; }
+  .chaussure .metal { fill: none; stroke: #c9ae7c; stroke-width: 2.3; }
+  .chaussure .metal-clair { fill: none; stroke: #f3e3bf; stroke-width: .8; }
+  .chaussure .mono { font: italic 400 13px var(--serif); letter-spacing: .02em; }
+  .chaussure .mono-creux { fill: color-mix(in oklab, var(--cuir) 62%, #120b07); }
+  .chaussure .mono-relief { fill: #fff; fill-opacity: .35; }
+
+  /* Tablette et téléphone */
+  @media (max-width: 1100px) {
+    .rubriques { display: none; }
+    .grille { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px) {
+    .bandeau { height: 56px; gap: 12px; }
+    .marque-nom { font-size: 22px; }
+    .marque-lieu { display: none; }
+    .fictif { font-size: 9.5px; letter-spacing: .1em; }
+    .bandeau-droite { gap: 10px; }
+    main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "titre" "grille" "provenance" "intro"; }
+    .bloc-titre { padding-top: 22px; }
+    .surtitre { margin-bottom: 12px; font-size: 10px; }
+    h1 { font-size: clamp(2rem, 9.6vw, 3rem); }
+    .nuancier { margin-top: 16px; gap: 10px 14px; }
+    .pastilles { gap: 7px; }
+    .pastille { width: 17px; height: 17px; }
+    .nuancier-titre { display: none; }
+    .grille { gap: 12px; margin-top: 20px; }
+    .scene-num { top: 10px; left: 11px; font-size: 9px; }
+    .scene-matiere { display: none; }
+    figcaption { padding-top: 9px; }
+    .modele-nom { font-size: 21px; }
+    .modele-prix { font-size: 13px; }
+    .modele-type { margin-top: 4px; font-size: 11.5px; }
+    .modele-type .sep, .modele-type .forme { display: none; }
+    .provenance { margin-top: 18px; padding: 14px 16px 13px; }
+    .prov-titre { font-size: 21px; }
+    .chapeau { padding-top: 16px; font-size: 13.5px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition-duration: .01s !important; transition-delay: 0s !important; }
+  }
 </style>
+</head>
 <body>
-  <header>
-    <div>
-      <div class="marque">Atelier Démo · données fictives</div>
-      <h1>Collection Été 2027</h1>
+<!-- Définitions partagées : dégradés, motifs, formes réutilisées et découpes (aucune ne dépend de la couleur). -->
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="g-ombre-bas" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#140c06" stop-opacity="0"/><stop offset="1" stop-color="#140c06" stop-opacity=".32"/></linearGradient>
+    <linearGradient id="g-ombre-dos" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#140c06" stop-opacity=".22"/><stop offset="1" stop-color="#140c06" stop-opacity="0"/></linearGradient>
+    <linearGradient id="g-lumiere" x1="0" y1="0" x2="0" y2="1"><stop offset=".25" stop-color="#fff" stop-opacity=".2"/><stop offset=".62" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="g-haut-clair" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".34"/><stop offset=".38" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="g-reflet"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".5" stop-color="#fff" stop-opacity=".3"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="g-sol"><stop offset="0" stop-color="#2a1d12" stop-opacity=".4"/><stop offset=".55" stop-color="#2a1d12" stop-opacity=".15"/><stop offset="1" stop-color="#2a1d12" stop-opacity="0"/></radialGradient>
+    <linearGradient id="g-semelle" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fcf9f3"/><stop offset=".65" stop-color="#efe8dc"/><stop offset="1" stop-color="#d9cfbf"/></linearGradient>
+    <linearGradient id="g-gomme" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cf9f6e"/><stop offset="1" stop-color="#9c6d44"/></linearGradient>
+    <linearGradient id="g-cuir-semelle" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a6347"/><stop offset=".3" stop-color="#5e412e"/><stop offset="1" stop-color="#3a281c"/></linearGradient>
+    <linearGradient id="g-talon" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#46301f"/><stop offset=".45" stop-color="#6e4c35"/><stop offset="1" stop-color="#4b3324"/></linearGradient>
+    <linearGradient id="g-liege" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8b48b"/><stop offset="1" stop-color="#b08860"/></linearGradient>
+    <linearGradient id="g-caoutchouc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a322c"/><stop offset="1" stop-color="#1f1a17"/></linearGradient>
+    <linearGradient id="g-lueur" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <pattern id="p-daim" width="7" height="6" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.1" r=".42" fill="#000" fill-opacity=".07"/><circle cx="4.9" cy="2.2" r=".38" fill="#fff" fill-opacity=".12"/><circle cx="2.8" cy="4.6" r=".34" fill="#000" fill-opacity=".06"/><circle cx="6.1" cy="5.1" r=".3" fill="#fff" fill-opacity=".1"/></pattern>
+    <pattern id="p-cote" width="2.7" height="10" patternUnits="userSpaceOnUse"><rect width="1.15" height="10" fill="#fff" fill-opacity=".1"/></pattern>
+    <pattern id="p-liege" width="9" height="7" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.8" r=".75" fill="#5e3f24" fill-opacity=".38"/><circle cx="6" cy="4.6" r=".55" fill="#5e3f24" fill-opacity=".32"/><circle cx="4.2" cy="1" r=".45" fill="#fff" fill-opacity=".3"/><circle cx="8" cy="6.2" r=".45" fill="#5e3f24" fill-opacity=".28"/></pattern>
+    <filter id="f-flou" filterUnits="userSpaceOnUse" x="-20" y="-20" width="440" height="290"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="f-flou-fin" filterUnits="userSpaceOnUse" x="-20" y="-20" width="440" height="290"><feGaussianBlur stdDeviation="1.6"/></filter>
+
+    <!-- Aube -->
+    <path id="aube-tige" d="M39,190 C34,168 36,140 47,118 C50,111 54,106 60,104 C86,105 122,117 150,124 C160,126 170,122 179,114 L266,156 C290,158 328,158.5 350,166 C361,170 367,177 368,186 L368,200 L39,200 Z"/>
+    <path id="aube-languette" d="M156,128 C160,113 168,101.5 180,97 C191,93 203,94.5 210,100.5 C214.5,105 216.5,110 219.5,113.5 L267,149 C272,151 274,154.5 271,158 L160,142 Z"/>
+    <path id="aube-selle" d="M199,120 L243,140 C245,168 252,186 263,201 L193,201 C189,180 191,156 199,120 Z"/>
+    <path id="aube-col" d="M50,92 L190,92 L190,116 C178,128 162,134.5 149,134 C120,128 86,117 57,114.5 C52,113 50,100 50,92 Z"/>
+    <path id="aube-semelle" d="M38,186 C60,190 90,195 125,196.5 C200,198.5 280,198 330,194.5 C348,193 360,189 366,184.5 C373,188 376,196 372,204 C366,210 352,214 330,215 C250,216.5 120,216 40,214 C36,206 35,195 38,186 Z"/>
+    <g id="aube-lacets">
+      <path d="M202.9,132.5 q2.2,-7 6.5,-11.3"/><path d="M220.8,140.9 q2.2,-7 6.5,-11.3"/><path d="M238.7,149.3 q2.2,-7 6.5,-11.3"/><path d="M256.6,157.6 q2,-6.4 6,-10.4"/>
+      <path d="M185,124.2 C187.5,117 190.5,111 194.5,107"/>
+      <path d="M194.5,107 C186,100 172.5,97.5 170,103 C168,108.5 181.5,111.5 194.5,107"/>
+      <path d="M194.5,107 C202.5,97.5 216.5,98 217,104 C217.5,110 204.5,111.5 194.5,107"/>
+      <path d="M193.5,108.5 C189,117.5 185,127.5 181.5,139.5"/><path d="M195.5,108.5 C198,119.5 198.5,130.5 196,142.5"/>
+    </g>
+    <clipPath id="clip-aube-tige"><use href="#aube-tige"/></clipPath>
+    <clipPath id="clip-aube"><use href="#aube-tige"/><use href="#aube-languette"/></clipPath>
+
+    <!-- Rive -->
+    <path id="rive-tige" d="M44,198 C40,180 41,160 48,146 C50,141.5 53,139 57,138.5 C92,140.5 128,148 160,150 C178,150.5 192,145 204,138.5 C238,135.5 288,143 324,157 C348,166.5 363,180 369,192 C371.6,197.5 372.4,203 371.5,208 C352,220 300,222 252,218 C200,208 150,201.5 112,201 L44,201 Z"/>
+    <clipPath id="clip-rive-tige"><use href="#rive-tige"/></clipPath>
+
+    <!-- Quai -->
+    <path id="quai-tige" d="M44,193 C38,176 40,156 47,138 C52,124 54.5,108 54,90 C53.5,70 53,52 55,37 C55.5,34.5 57.5,33 60,33 L146,39 C149,39.3 151,41.5 151,44.5 C152,66 155,92 164,112 C180,132 214,143 262,153 C302,160.5 334,163.5 353,172 C365.5,178 372.5,190 371,205 C352,217.5 300,220.5 250,215.5 C200,204.5 150,196 116,195.5 L44,195.5 Z"/>
+    <path id="quai-elastique" d="M89,28 L129,28 C127,68 121,103 116.5,124 C114.5,131 107.5,131 105.5,124 C100,103 92.5,68 89,28 Z"/>
+    <clipPath id="clip-quai-tige"><use href="#quai-tige"/></clipPath>
+
+    <!-- Dune -->
+    <path id="dune-liege" d="M42,190 C45,185.5 52,184.5 60,186.5 C75,190 95,192 120,190.5 C150,189 165,185.5 182,186.5 C212,188.5 252,194 292,195 C322,195.5 340,193 352,192 C364,191.5 371,196.5 372,205 C372.8,209.5 372.5,212 372,213 C366,217 356,219.5 340,220 C260,221 120,220 44,219 C41,210 40.5,198 42,190 Z"/>
+    <path id="dune-assise" d="M42,190 C44,183 52,180.5 62,181 C80,182 100,184 122,183.5 C150,183 166,178.5 186,179 C216,180 256,187 294,188.5 C322,189.5 342,186.5 354,186 C365,186 371,191 372,198 C369,194 364,191.5 352,192 C340,193 322,195.5 292,195 C252,194 212,188.5 182,186.5 C165,185.5 150,189 120,190.5 C95,192 75,190 60,186.5 C52,184.5 45,185.5 42,190 Z"/>
+    <path id="dune-avant" d="M296,199 C296.5,182 299.5,168 305.5,159.5 C311,152 323,150 332,153.5 C338.5,156.5 341,165 341.5,177 L342.5,198 Z"/>
+    <path id="dune-coup" d="M192,193 C193,170 198,148 206,133 C211,124.5 226,122 235,128 C236.5,144 235.5,168 232,194 Z"/>
+    <path id="dune-contrefort" d="M41,193 C41.5,166 45,140 52,112 L77,112 C72,140 70,166 71,193 Z"/>
+    <path id="dune-cheville" d="M50,102.5 C90,98 132,98 170,102 C176,102.6 178.5,108 176.5,112.5 C175,115.5 172,116.4 168,116 C130,112.5 90,112.5 52,117 Z"/>
+    <clipPath id="clip-dune"><use href="#dune-avant"/><use href="#dune-coup"/><use href="#dune-contrefort"/><use href="#dune-cheville"/></clipPath>
+  </defs>
+</svg>
+
+<div class="barre" id="barre" aria-hidden="true"></div>
+
+<header class="bandeau">
+  <div class="marque"><span class="marque-nom">Atelier <em>Démo</em></span><span class="marque-lieu">Souliers · Paris</span></div>
+  <nav class="rubriques" aria-label="Rubriques (décor)"><span>Nouveautés</span><span class="ici">Collection Été</span><span>L’atelier</span><span>Boutiques</span></nav>
+  <div class="bandeau-droite">
+    <span class="fictif fictif-haut">Données fictives</span>
+    <span class="direct" id="direct" title="Coloris relevé chaque seconde"><span class="direct-point"></span><span id="direct-texte">En direct</span></span>
+  </div>
+</header>
+
+<main>
+  <section class="bloc-titre" aria-labelledby="titre">
+    <p class="surtitre">Collection Été 2027 <span>— N° 04</span></p>
+    <h1 id="titre">L’été se porte <span class="coloris-ligne"><span id="coloris-titre">en bleu Riviera</span></span></h1>
+    <div class="nuancier">
+      <span class="nuancier-titre">Coloris</span>
+      <ul class="pastilles" id="pastilles" aria-label="Coloris permis"></ul>
+      <span class="nuancier-nom" id="nuancier-nom">bleu Riviera</span>
     </div>
-    <div class="etat"><span class="pastille"></span><span>Coloris : <strong id="couleur">…</strong></span><span class="direct">en direct</span></div>
-  </header>
-  <main>
-    <article class="modele">
-      <svg viewBox="0 0 200 100" aria-hidden="true">
-        <path class="semelle" d="M8 78 Q8 90 20 90 H186 Q196 90 196 80 V75 H8 Z"/>
-        <path class="cuir" d="M12 76 C12 60 28 52 50 50 L78 34 Q90 27 102 34 L122 46 C152 50 180 56 193 70 L194 76 Z"/>
-        <path class="detail" d="M84 42 L96 50 M78 48 L90 56 M72 54 L84 62"/>
-      </svg>
-      <div class="nom">Aube</div><div class="prix">Basket basse · 119 €</div>
-    </article>
-    <article class="modele">
-      <svg viewBox="0 0 200 100" aria-hidden="true">
-        <path class="semelle" d="M14 80 Q14 90 26 90 H182 Q192 90 192 82 V78 H14 Z"/>
-        <path class="cuir" d="M16 78 C16 58 56 50 100 50 C148 50 184 60 190 78 Z"/>
-        <path class="detail" d="M60 60 C80 54 120 54 140 60"/>
-      </svg>
-      <div class="nom">Rive</div><div class="prix">Mocassin · 139 €</div>
-    </article>
-    <article class="modele">
-      <svg viewBox="0 0 200 100" aria-hidden="true">
-        <path class="semelle" d="M24 84 Q24 92 34 92 H184 Q194 92 194 84 V80 H24 Z"/>
-        <path class="cuir" d="M30 82 V18 Q30 12 38 12 H76 Q84 12 84 20 L88 56 C122 58 168 62 188 76 L190 82 Z"/>
-        <path class="detail" d="M40 30 H74 M40 42 H76"/>
-      </svg>
-      <div class="nom">Quai</div><div class="prix">Bottine · 189 €</div>
-    </article>
-    <article class="modele">
-      <svg viewBox="0 0 200 100" aria-hidden="true">
-        <path class="semelle" d="M10 82 Q10 90 22 90 H184 Q194 90 194 82 V78 H10 Z"/>
-        <path class="cuir" d="M36 78 C40 60 58 56 70 60 L74 78 Z M92 78 C96 54 120 50 134 58 L138 78 Z M150 78 C154 62 172 60 182 68 L184 78 Z"/>
-      </svg>
-      <div class="nom">Dune</div><div class="prix">Sandale · 89 €</div>
-    </article>
-  </main>
-  <div id="toast" role="status" aria-live="polite"></div>
+  </section>
+
+  <p class="chapeau">Quatre souliers cousus main à Paris, <strong>teints d’une seule couleur</strong> pour toute la saison. Le coloris change en direct, dès que l’atelier le décide.</p>
+
+  <aside class="provenance" id="provenance" aria-live="polite" aria-label="Provenance du coloris">
+    <p class="prov-libelle"><svg class="goutte" viewBox="0 0 12 15" aria-hidden="true"><path d="M6 0.5C6 0.5 0.8 6.6 0.8 9.6a5.2 5.2 0 0 0 10.4 0C11.2 6.6 6 0.5 6 0.5Z"/></svg>Provenance du coloris</p>
+    <p class="prov-titre prov-ligne" id="prov-titre" style="--k:0">Coloris d’origine</p>
+    <p class="prov-detail prov-ligne" id="prov-detail" style="--k:1">Aucune automatisation n’a encore modifié la collection.</p>
+    <div class="prov-pied prov-ligne" style="--k:2"><span id="prov-trajet">bleu Riviera</span><span class="prov-statut" id="prov-statut">Relevé chaque seconde</span></div>
+  </aside>
+
+  <section class="grille" aria-label="Les quatre modèles de la collection">
+    <!-- 01 · Aube, basket basse -->
+    <figure class="modele" style="--i:0">
+      <div class="scene">
+        <span class="scene-num">N° 01</span><span class="scene-matiere">Veau velours</span>
+        <div class="calque calque-base">
+          <svg class="chaussure" viewBox="0 0 400 250" aria-hidden="true" focusable="false">
+            <g class="ombre-sol"><ellipse cx="206" cy="229" rx="174" ry="9" fill="url(#g-sol)"/><ellipse cx="204" cy="226.4" rx="152" ry="2.6" fill="#2a1d12" fill-opacity=".36" filter="url(#f-flou-fin)"/></g>
+            <path class="doublure" d="M60,104 C74,100 98,99.5 121,104 C138,107.5 152,112.5 163,118 L150,124 C122,117 86,105 60,104 Z"/>
+            <path d="M64,104.5 C90,104 122,112 152,122" fill="none" stroke="#1b110a" stroke-opacity=".3" stroke-width="4" filter="url(#f-flou-fin)"/>
+            <use href="#aube-languette" class="c3"/><use href="#aube-languette" fill="url(#p-daim)"/>
+            <path class="bord" style="stroke-width:2.4" d="M158,124 C162,112 169.5,102 180.5,97.6 C191.5,93.6 203,95 209.6,101 C213.6,105 215.8,109.6 218.4,112.8"/>
+            <path class="trait-clair" d="M164,119 C168,109 174,102.5 182,100 C190,97.5 199,98 205,101.5"/>
+            <use href="#aube-tige" class="c"/>
+            <g clip-path="url(#clip-aube-tige)">
+              <rect class="lumiere" x="20" y="0" width="370" height="230"/>
+              <use href="#aube-selle" class="c3"/><use href="#aube-selle" fill="url(#p-daim)"/>
+              <path class="ombre-bord" d="M199,120 C191,156 189,180 193,201 M243,140 C245,168 252,186 263,201"/>
+              <path class="ombre-bord" d="M64,107.5 C66,126 78,148 100,164 C113,173 119,186 120,201 M300,148 C296,176 284,192 266,201"/>
+              <path class="c2" d="M30,92 L64,92 L64,107.5 C66,126 78,148 100,164 C113,173 119,186 120,201 L30,201 Z"/>
+              <path class="c2" d="M300,148 L384,148 L384,201 L266,201 C284,192 296,176 300,148 Z"/>
+              <use href="#aube-col" class="c3"/><use href="#aube-col" fill="url(#p-daim)"/>
+              <path d="M58,117 C88,119 122,130 149,136.5 C160,137.5 170,133 178,127" fill="none" stroke="#120a05" stroke-opacity=".16" stroke-width="5" filter="url(#f-flou-fin)"/>
+              <path class="ombre-bord" d="M172.5,126 L264,167.6"/>
+              <path class="c2" d="M172,105 L272,153 C274,160 270,166 264,167.6 L172.5,126 C168,123 168,110 172,105 Z"/>
+              <g class="couture">
+                <path d="M60.5,111 C63,128 74.5,150 96.5,166.5 C108.5,175.5 114.5,187 115.5,199"/>
+                <path d="M303.6,152 C300.6,176 291,191 274.4,199.6"/>
+                <path d="M175.2,122.6 L261.5,163.6"/>
+                <path d="M57,117.5 C87,119.5 121,130 149,136.5 C158,137.4 166,135 172,131"/>
+                <path d="M195.6,128 C192.8,154 192.6,178 196.6,199"/>
+                <path d="M239.8,143 C241.8,166 248.2,185 257.6,199"/>
+              </g>
+              <path class="perfo" d="M309.6,154 C306.6,178 297.6,192 284.6,199.6"/>
+              <g transform="translate(140 176) rotate(4)"><text class="mono mono-relief" x=".4" y="1">AD</text><text class="mono mono-creux">AD</text></g>
+              <rect x="30" y="168" width="350" height="34" fill="url(#g-ombre-bas)"/>
+              <ellipse cx="327" cy="163" rx="36" ry="5" transform="rotate(8 327 163)" fill="url(#g-reflet)" opacity=".55"/>
+              <ellipse cx="44.5" cy="152" rx="4.5" ry="30" fill="url(#g-reflet)" opacity=".42"/>
+              <ellipse cx="132" cy="160" rx="62" ry="16" fill="url(#g-reflet)" opacity=".12"/>
+              <path class="trait-clair" d="M62,106.5 C88,108 122,119.5 150,126.5"/>
+              <path class="trait-clair" d="M181,116.6 L264,156.4"/>
+            </g>
+            <path class="c2" d="M43,124 C43.8,113 46.4,104.5 50.6,99 C52.4,97.4 56,97.2 57.8,98.6 C56.6,106 56.2,114 56.6,124 Z"/>
+            <path class="couture" d="M46.6,121 C47.2,112 49.2,105.5 52.4,101"/>
+            <g class="oeillets">
+              <circle class="oeillet" cx="185" cy="124.2" r="2.7"/><circle class="oeillet" cx="202.9" cy="132.5" r="2.7"/><circle class="oeillet" cx="220.8" cy="140.9" r="2.7"/><circle class="oeillet" cx="238.7" cy="149.3" r="2.7"/><circle class="oeillet" cx="256.6" cy="157.6" r="2.7"/>
+              <circle class="trou" cx="185" cy="124.2" r="1.15"/><circle class="trou" cx="202.9" cy="132.5" r="1.15"/><circle class="trou" cx="220.8" cy="140.9" r="1.15"/><circle class="trou" cx="238.7" cy="149.3" r="1.15"/><circle class="trou" cx="256.6" cy="157.6" r="1.15"/>
+            </g>
+            <use href="#aube-lacets" class="lacet-ombre"/><use href="#aube-lacets" class="lacet"/>
+            <ellipse class="noeud" cx="194.5" cy="107.5" rx="3.4" ry="2.8"/>
+            <path class="ferret" d="M181.5,139.5 L180.3,144"/><path class="ferret" d="M196,142.5 L195.5,147"/>
+            <use href="#aube-semelle" fill="url(#g-semelle)"/>
+            <path d="M40.5,187.5 C62,191.5 92,196 125,197.6 C200,199.6 280,199 330,195.6 C347,194.2 359,190.4 365.5,186" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1"/>
+            <path class="couture" style="stroke:#a58b6e" d="M46,193.2 C80,197.4 110,199.6 140,200.6 C210,202 290,201.6 336,198.6 C350,197.6 359,194 364,190"/>
+            <path d="M44,206.5 C120,209 250,209.5 336,207.5 C352,206.9 362,204.5 368.5,200.5" fill="none" stroke="#5a4532" stroke-opacity=".14" stroke-width="1"/>
+            <path d="M40,214 C120,216 250,216.5 330,215 C352,214 366,210 372,204 C376,206 377,209 375,212 C368,221 352,225 330,225 L50,225 C44,225 40,221 40,214 Z" fill="url(#g-gomme)"/>
+            <path d="M52,222.6 L328,222.6" fill="none" stroke="#5a3a1f" stroke-opacity=".3" stroke-width="3.2" stroke-dasharray="3 2.6"/>
+          </svg>
+        </div>
+        <div class="calque calque-lueur"><svg viewBox="0 0 400 250" aria-hidden="true" focusable="false"><g clip-path="url(#clip-aube)"><g class="lueur"><rect x="-30" y="-30" width="60" height="310" fill="url(#g-lueur)" transform="rotate(10 0 125)"/></g></g></svg></div>
+      </div>
+      <figcaption><span class="modele-nom">Aube</span><span class="modele-prix">119 €</span><span class="modele-type"><span class="forme">Basket basse</span><span class="sep"> · </span><span class="modele-coloris">bleu Riviera</span></span></figcaption>
+    </figure>
+
+    <!-- 02 · Rive, mocassin -->
+    <figure class="modele" style="--i:1">
+      <div class="scene">
+        <span class="scene-num">N° 02</span><span class="scene-matiere">Cuir glacé</span>
+        <div class="calque calque-base">
+          <svg class="chaussure" viewBox="0 0 400 250" aria-hidden="true" focusable="false">
+            <g class="ombre-sol"><ellipse cx="208" cy="229" rx="172" ry="8.5" fill="url(#g-sol)"/><ellipse cx="300" cy="226.3" rx="70" ry="2.4" fill="#2a1d12" fill-opacity=".34" filter="url(#f-flou-fin)"/><ellipse cx="80" cy="226.3" rx="34" ry="2.2" fill="#2a1d12" fill-opacity=".34" filter="url(#f-flou-fin)"/></g>
+            <path class="doublure-fauve" d="M57,138.5 C80,134.6 130,134.4 170,139.2 C184,140.6 196,140 204,138.5 C192,145 178,150.5 160,150 C128,148 92,140.5 57,138.5 Z"/>
+            <path d="M60,139.5 C92,141.5 128,149 160,151 C177,151.5 191,146 203,140" fill="none" stroke="#1a100a" stroke-opacity=".4" stroke-width="4" filter="url(#f-flou-fin)"/>
+            <use href="#rive-tige" class="c"/>
+            <g clip-path="url(#clip-rive-tige)">
+              <rect class="lumiere" x="20" y="0" width="370" height="230"/>
+              <path class="clair-doux" d="M204,110 L390,110 L390,215 L361,201 C359,193 352,185.5 340,178 C320,166 285,154 252,149 L204,141 Z"/>
+              <path class="ombre-bord" d="M85,143.4 C81,160 84.5,182 97,204"/>
+              <path class="trait" d="M85,143.4 C81,160 84.5,182 97,204"/>
+              <path class="trait" style="stroke-width:1.7" d="M254,149.2 C288,154.5 321,166 340.5,178 C352,185.5 359,193 361,201"/>
+              <path class="trait-clair" d="M254,147.6 C288,152.9 321,164.4 340.5,176.4 C352,183.9 359,191.4 361.4,199"/>
+              <path class="points-moc" d="M256,149.6 C288,154.5 321,166 340.5,178 C352,185.5 358.5,192.5 360.6,199"/>
+              <path class="ombre-bord" d="M196.5,169.5 C210,177.5 232,180 246,177 M258,137 C254,152 250,165 246,177"/>
+              <path class="c2" d="M199,124 C218,127 238,131 258,137 C254,152 250,165 246,177 C232,180 210,177.5 196.5,169.5 C197,155 198,139 199,124 Z"/>
+              <path class="c4" d="M211.5,153.5 C216,149 231,149.4 236,154 C231,158 216,158 211.5,153.5 Z"/>
+              <path class="trait-clair" d="M212.8,156.2 C218,158.9 230,158.9 234.8,156.4"/>
+              <path class="trait" d="M196.5,170 C188.5,181 182.5,193 179.5,205"/>
+              <path class="bord" d="M57,138.5 C92,140.5 128,148 160,150 C178,150.5 192,145 204,138.5"/>
+              <g class="couture">
+                <path d="M58,143 C92,145 128,152.5 160,154.5 C178,155 191,150 199,145"/>
+                <path d="M89,144.6 C85.4,161 89,182 101,203.6"/>
+                <path d="M201.6,129.6 C220,132.4 238,136.2 254.8,141.4"/>
+                <path d="M199.4,166 C212,173.4 231,176 243.2,173.6"/>
+                <path d="M201.8,131 C201,143 200.4,155 200,166"/><path d="M254.2,143 C251.6,153 248.6,163 245.2,172.4"/>
+                <path d="M200.8,171.4 C193,182.4 187,194 184.2,205"/>
+              </g>
+              <rect x="30" y="178" width="350" height="44" fill="url(#g-ombre-bas)"/>
+              <ellipse cx="336" cy="169" rx="30" ry="5.5" transform="rotate(30 336 169)" fill="url(#g-reflet)" opacity=".55"/>
+              <ellipse cx="288" cy="148.5" rx="40" ry="3.6" transform="rotate(14 288 148.5)" fill="url(#g-reflet)" opacity=".35"/>
+              <ellipse cx="47" cy="172" rx="3.6" ry="22" fill="url(#g-reflet)" opacity=".45"/>
+              <ellipse cx="122" cy="174" rx="56" ry="12" fill="url(#g-reflet)" opacity=".14"/>
+            </g>
+            <path d="M43,196.5 L112,197 C150,198 200,204.5 250,214.5 C268,217.5 300,218.5 330,217.5 C352,216.5 365,212.5 372,205.5 C375,207 376,210 374.5,213 C366,220 352,224 330,225 C300,226 268,225 250,222 C200,212 150,205 112,204 L46,204 C44,204 42.5,202 42.5,200 Z" fill="url(#g-cuir-semelle)"/>
+            <path d="M43.5,196.8 L112,197.3 C150,198.3 200,204.8 250,214.8 C268,217.8 300,218.8 330,217.8 C352,216.8 365,212.8 372,205.8" fill="none" stroke="#a37b5c" stroke-width="1"/>
+            <path class="points" d="M50,199.8 L112,200.2 C150,201.2 200,207.7 250,217.6 C268,220.6 300,221.6 330,220.6 C350,219.7 362,216.2 369,210.7"/>
+            <path d="M46,204 L112,204 L109.5,226 L52,226 C48.5,226 46.5,224 46.5,221 Z" fill="url(#g-talon)"/>
+            <path d="M46.5,210.5 L111.3,210.5 M46.5,216.2 L110.6,216.2" fill="none" stroke="#1b120c" stroke-opacity=".35" stroke-width=".8"/>
+            <path d="M46.6,222 L110,222 L109.5,226 L52,226 C49,226 46.8,224.6 46.6,222 Z" fill="#221812"/>
+            <path d="M105.5,204 L112,204 L109.5,226 L103.5,226 Z" fill="#000" fill-opacity=".18"/>
+          </svg>
+        </div>
+        <div class="calque calque-lueur"><svg viewBox="0 0 400 250" aria-hidden="true" focusable="false"><g clip-path="url(#clip-rive-tige)"><g class="lueur"><rect x="-30" y="-30" width="60" height="310" fill="url(#g-lueur)" transform="rotate(10 0 125)"/></g></g></svg></div>
+      </div>
+      <figcaption><span class="modele-nom">Rive</span><span class="modele-prix">139 €</span><span class="modele-type"><span class="forme">Mocassin</span><span class="sep"> · </span><span class="modele-coloris">bleu Riviera</span></span></figcaption>
+    </figure>
+
+    <!-- 03 · Quai, bottine Chelsea -->
+    <figure class="modele" style="--i:2">
+      <div class="scene">
+        <span class="scene-num">N° 03</span><span class="scene-matiere">Cuir lisse</span>
+        <div class="calque calque-base">
+          <svg class="chaussure" viewBox="0 0 400 250" aria-hidden="true" focusable="false">
+            <g class="ombre-sol"><ellipse cx="206" cy="229" rx="174" ry="9" fill="url(#g-sol)"/><ellipse cx="300" cy="226.3" rx="72" ry="2.4" fill="#2a1d12" fill-opacity=".34" filter="url(#f-flou-fin)"/><ellipse cx="80" cy="226.3" rx="36" ry="2.3" fill="#2a1d12" fill-opacity=".34" filter="url(#f-flou-fin)"/></g>
+            <use href="#quai-tige" class="c"/>
+            <g clip-path="url(#clip-quai-tige)">
+              <rect class="lumiere" x="20" y="0" width="370" height="230"/>
+              <use href="#quai-elastique" class="elastique"/><use href="#quai-elastique" fill="url(#p-cote)"/>
+              <path d="M89,28 C92.5,68 100,103 105.5,124 C107.5,131 114.5,131 116.5,124 C121,103 127,68 129,28" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="3" filter="url(#f-flou-fin)"/>
+              <path class="trait" d="M89,28 C92.5,68 100,103 105.5,124 C107.5,131 114.5,131 116.5,124 C121,103 127,68 129,28"/>
+              <path class="c2" d="M30,20 L66.5,20 C64.5,52 63.5,88 63,104 C60,136 54,166 52.5,206 L30,206 Z"/>
+              <path class="trait" d="M110.5,131 C111.5,152 114,174 119,197"/>
+              <path class="bord" d="M60,33 L146,39 C149,39.3 151,41.5 151,44.5"/>
+              <g class="couture">
+                <path d="M85.6,42 C89.2,72 96.4,104 102.4,126.4 C105,135 117,135 119.6,126.4 C124.6,104 130.2,72 132.6,42"/>
+                <path d="M60.4,40 C59.4,62 59,84 58.6,102 C56,134 50.4,164 48.8,196"/>
+                <path d="M114.6,133 C115.6,153 118.2,175 123.2,198"/>
+                <path d="M69,38.6 L84,39.7"/><path d="M134,42.5 L145.5,43.3"/>
+              </g>
+              <rect x="40" y="30" width="46" height="175" fill="url(#g-ombre-dos)"/>
+              <rect x="30" y="170" width="350" height="50" fill="url(#g-ombre-bas)"/>
+              <ellipse cx="153" cy="82" rx="4.2" ry="34" transform="rotate(-6 153 82)" fill="url(#g-reflet)" opacity=".42"/>
+              <ellipse cx="205" cy="134" rx="34" ry="4.6" transform="rotate(22 205 134)" fill="url(#g-reflet)" opacity=".32"/>
+              <ellipse cx="333" cy="166" rx="34" ry="5.6" transform="rotate(12 333 166)" fill="url(#g-reflet)" opacity=".55"/>
+              <ellipse cx="47" cy="166" rx="4" ry="22" fill="url(#g-reflet)" opacity=".36"/>
+            </g>
+            <path class="c2" d="M55.5,41 C54.5,30 56,19 60.5,14.5 C63.5,11.6 70,11.8 72.5,15 C72,24 72.4,32 74,42 Z"/>
+            <path class="c4" d="M61.5,32 C61.5,26.5 62.8,22 65.3,20.8 C67,20 68.2,21.4 68,23.6 C67.6,26.8 67.8,29.6 68.6,32 Z"/>
+            <path class="couture" d="M58.4,39 C57.8,30 59.2,21.6 62.4,18 C64.6,15.6 68.4,15.8 69.8,17.8"/>
+            <path d="M43,191.5 L116,192 C150,193 200,201.5 250,212.5 C268,216 300,217.5 330,216.5 C352,215.5 365,211 372,203.5 C375.5,205.5 376.5,208.5 375,212 C366,220 352,224 330,225 C300,226 268,224.5 250,221 C200,210 150,201 116,200 L46,200 C44,200 42.5,198 42.5,196 Z" fill="url(#g-cuir-semelle)"/>
+            <path d="M43.5,191.8 L116,192.3 C150,193.3 200,201.8 250,212.8 C268,216.3 300,217.8 330,216.8 C352,215.8 365,211.3 372,203.8" fill="none" stroke="#a37b5c" stroke-width="1"/>
+            <path class="points" d="M50,195 L116,195.4 C150,196.4 200,204.9 250,215.8 C268,219.3 300,220.8 330,219.8 C350,218.9 362,215.4 369,209.6"/>
+            <path d="M46,200 L116,200 L113,226 L52,226 C48.5,226 46.5,224 46.5,221 Z" fill="url(#g-talon)"/>
+            <path d="M46.5,206.6 L115.2,206.6 M46.5,213 L114.5,213 M46.5,219.4 L113.7,219.4" fill="none" stroke="#1b120c" stroke-opacity=".35" stroke-width=".8"/>
+            <path d="M46.6,222 L113.5,222 L113,226 L52,226 C49,226 46.8,224.6 46.6,222 Z" fill="#221812"/>
+            <path d="M109.5,200 L116,200 L113,226 L107,226 Z" fill="#000" fill-opacity=".18"/>
+          </svg>
+        </div>
+        <div class="calque calque-lueur"><svg viewBox="0 0 400 250" aria-hidden="true" focusable="false"><g clip-path="url(#clip-quai-tige)"><g class="lueur"><rect x="-30" y="-30" width="60" height="310" fill="url(#g-lueur)" transform="rotate(10 0 125)"/></g></g></svg></div>
+      </div>
+      <figcaption><span class="modele-nom">Quai</span><span class="modele-prix">189 €</span><span class="modele-type"><span class="forme">Bottine Chelsea</span><span class="sep"> · </span><span class="modele-coloris">bleu Riviera</span></span></figcaption>
+    </figure>
+
+    <!-- 04 · Dune, sandale à brides -->
+    <figure class="modele" style="--i:3">
+      <div class="scene">
+        <span class="scene-num">N° 04</span><span class="scene-matiere">Nappa · liège</span>
+        <div class="calque calque-base">
+          <svg class="chaussure" viewBox="0 0 400 250" aria-hidden="true" focusable="false">
+            <g class="ombre-sol"><ellipse cx="206" cy="229.5" rx="172" ry="8.5" fill="url(#g-sol)"/><ellipse cx="206" cy="226.8" rx="158" ry="2.4" fill="#2a1d12" fill-opacity=".36" filter="url(#f-flou-fin)"/></g>
+            <path class="doublure-fauve" d="M53,106 C70,95.5 148,91.5 172,99.5 L172.5,104 C150,97.5 74,100.5 55,110.5 Z"/>
+            <use href="#dune-assise" class="c3"/><use href="#dune-assise" fill="url(#p-daim)"/>
+            <path d="M42,190 C44,183 52,180.5 62,181 C80,182 100,184 122,183.5 C150,183 166,178.5 186,179 C216,180 256,187 294,188.5 C322,189.5 342,186.5 354,186 C365,186 371,191 372,198" fill="none" stroke="#120a05" stroke-opacity=".18" stroke-width="2"/>
+            <ellipse cx="322" cy="192" rx="28" ry="3.2" fill="#1b120b" fill-opacity=".25" filter="url(#f-flou-fin)"/>
+            <ellipse cx="216" cy="188" rx="26" ry="3" fill="#1b120b" fill-opacity=".25" filter="url(#f-flou-fin)"/>
+            <path class="doublure-fauve" d="M305.5,159.5 C311,152 323,150 332,153.5 C326,147.5 313,147.5 305.5,159.5 Z"/>
+            <path class="doublure-fauve" d="M206,133 C211,124.5 226,122 235,128 C229,119.5 213,119.5 206,133 Z"/>
+            <use href="#dune-contrefort" class="c"/>
+            <use href="#dune-coup" class="c"/>
+            <use href="#dune-avant" class="c"/>
+            <use href="#dune-cheville" class="c"/>
+            <use href="#dune-contrefort" fill="url(#g-ombre-dos)"/>
+            <use href="#dune-coup" fill="url(#g-haut-clair)"/><use href="#dune-avant" fill="url(#g-haut-clair)"/><use href="#dune-cheville" fill="url(#g-haut-clair)"/>
+            <path class="c2" d="M92,104.3 L128,103.2 L128,113.4 L92,114.4 C89,114.4 87.4,112.2 87.4,109.4 C87.4,106.6 89,104.3 92,104.3 Z"/>
+            <circle class="trou" cx="97" cy="109.3" r="1.25"/><circle class="trou" cx="105" cy="109.1" r="1.25"/>
+            <rect class="c" x="136" y="100.4" width="5.4" height="16.8" rx="1.4"/><path class="trait" d="M136.6,101.4 L136.6,116.2 M140.8,101.4 L140.8,116.2"/>
+            <g class="couture">
+              <path d="M44.8,190 C45.3,165 48.5,141 54.8,116"/><path d="M67.4,116 C63.6,141 62,165 62.8,190"/>
+              <path d="M55,106.2 C92,102 132,102 168,105.6"/><path d="M56,113.6 C92,109.8 130,109.4 168,112.6"/>
+              <path d="M196,190 C197,170 201.6,150 208.8,136.2 C213,129 224.5,127 231.2,131.4"/><path d="M231.6,134 C232.6,150 231.6,170 228.6,190"/>
+              <path d="M300,195 C300.5,181 303.5,169 308.6,162 C313,156 322.4,154.4 329.6,157.2"/><path d="M337.6,170 C338,177 338.4,186 338.8,195"/>
+            </g>
+            <rect x="117" y="98" width="12" height="21.6" rx="3.4" class="metal"/>
+            <path class="metal" style="stroke-width:1.7" d="M122.6,109 L134.4,108.6"/>
+            <path class="metal-clair" d="M118.8,101 L118.8,116.4"/>
+            <use href="#dune-liege" fill="url(#g-liege)"/><use href="#dune-liege" fill="url(#p-liege)"/>
+            <path d="M42,198 C120,203 260,205 371.5,204" fill="none" stroke="#5e3f24" stroke-opacity=".14" stroke-width="1"/>
+            <path d="M42,190 C45,185.5 52,184.5 60,186.5 C75,190 95,192 120,190.5 C150,189 165,185.5 182,186.5 C212,188.5 252,194 292,195 C322,195.5 340,193 352,192 C362,191.6 368.5,194.5 371,199" fill="none" class="bord" style="stroke-width:3.4"/>
+            <path d="M44,219 C120,220 260,221 340,220 C356,219.5 366,217 372,213 C375.5,216.5 374,222 367,224.5 C358,226.6 345,226.6 330,226.6 L54,226.6 C47.5,226.6 44,224 44,219 Z" fill="url(#g-caoutchouc)"/>
+            <path d="M56,224 L334,224" fill="none" stroke="#fff" stroke-opacity=".1" stroke-width="2.4" stroke-dasharray="3 3"/>
+          </svg>
+        </div>
+        <div class="calque calque-lueur"><svg viewBox="0 0 400 250" aria-hidden="true" focusable="false"><g clip-path="url(#clip-dune)"><g class="lueur"><rect x="-30" y="-30" width="60" height="310" fill="url(#g-lueur)" transform="rotate(10 0 125)"/></g></g></svg></div>
+      </div>
+      <figcaption><span class="modele-nom">Dune</span><span class="modele-prix">89 €</span><span class="modele-type"><span class="forme">Sandale à brides</span><span class="sep"> · </span><span class="modele-coloris">bleu Riviera</span></span></figcaption>
+    </figure>
+  </section>
+</main>
+
+<footer><span>Atelier Démo est une maison fictive · toutes les données de cette page sont fictives.</span><span>Page de démonstration du projet « Dès que »</span></footer>
+
 <script>
-  // Relevé de l'état toutes les secondes : la couleur change quand une pipe l'a demandé.
-  let actuelle = null;
-  const toast = document.getElementById("toast");
+(() => {
+  "use strict";
+  // Mêmes couleurs que COULEURS dans page-demo.ts ; le serveur donne l'hexadécimal actif, ceci sert au nuancier et aux noms.
+  const NUANCES = {
+    bleu: ["#2563eb", "bleu Riviera"], rouge: ["#dc2626", "rouge coquelicot"], noir: ["#1f2937", "noir encre"],
+    blanc: ["#e7e5e4", "blanc craie"], vert: ["#16a34a", "vert jardin"], jaune: ["#eab308", "jaune mimosa"],
+    rose: ["#ec4899", "rose pivoine"], orange: ["#ea580c", "orange mandarine"], violet: ["#7c3aed", "violet iris"],
+    gris: ["#6b7280", "gris ardoise"],
+  };
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const DUREE = 1600, DECALAGE = 160;
+  const reduit = matchMedia("(prefers-reduced-motion: reduce)");
+  const $ = (id) => document.getElementById(id);
+
+  // Chaque scène reçoit un double de la chaussure, révélé par un masque qui balaie : la teinture.
+  const scenes = [...document.querySelectorAll(".scene")].map((el, i) => {
+    const base = el.querySelector(".calque-base");
+    const voile = base.cloneNode(true);
+    voile.className = "calque calque-voile";
+    voile.querySelectorAll(".ombre-sol").forEach((n) => n.remove());
+    base.after(voile);
+    return { el, base, voile, i, figure: el.closest(".modele"), legende: el.closest(".modele").querySelector(".modele-coloris") };
+  });
+
+  function luminance(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  function teinte(couleur, hex) {
+    const connue = Object.hasOwn(NUANCES, couleur) ? NUANCES[couleur] : null;
+    const h = HEX.test(hex ?? "") ? hex : connue ? connue[0] : "#8a8178";
+    return { couleur, hex: h, nom: connue ? connue[1] : String(couleur), l: luminance(h) };
+  }
+  function peindre(calque, t) {
+    calque.style.setProperty("--cuir", t.hex);
+    calque.style.setProperty("--fil", t.l > 0.35 ? "color-mix(in oklab, var(--cuir) 45%, #3b2c20)" : "color-mix(in oklab, var(--cuir) 22%, #fbf5ea)");
+  }
+  function racine(t) {
+    const s = document.documentElement.style;
+    s.setProperty("--t", t.hex);
+    s.setProperty("--t-texte", t.l > 0.3 ? `color-mix(in oklab, ${t.hex} 52%, #2a2018)` : t.hex);
+    $("nuancier-nom").textContent = t.nom;
+  }
+  function legende(s, t) {
+    s.figure.style.setProperty("--c-legende", t.hex);
+    s.legende.textContent = t.nom;
+  }
+  function nuancier(permises, active) {
+    const ul = $("pastilles");
+    const liste = Array.isArray(permises) ? permises.filter((c) => typeof c === "string").slice(0, 24) : [];
+    if (ul.dataset.cle !== liste.join()) {
+      ul.replaceChildren(...liste.map((c) => {
+        const t = teinte(c, Object.hasOwn(NUANCES, c) ? NUANCES[c][0] : null);
+        const li = document.createElement("li");
+        li.className = "pastille";
+        li.dataset.couleur = c;
+        li.title = t.nom;
+        li.style.setProperty("--p", t.hex);
+        const nom = document.createElement("span");
+        nom.className = "cache";
+        nom.textContent = t.nom;
+        li.append(nom);
+        return li;
+      }));
+      ul.dataset.cle = liste.join();
+    }
+    for (const li of ul.children) li.setAttribute("aria-current", String(li.dataset.couleur === active));
+  }
+  function heure(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const h = d.toLocaleTimeString("fr-FR");
+    return d.toDateString() === new Date().toDateString() ? h : `${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} à ${h}`;
+  }
+  function provenance(e, t, ancienne, enCours) {
+    const carte = $("provenance");
+    carte.classList.toggle("en-cours", enCours);
+    if (!e.modifieeLe) {
+      $("prov-titre").textContent = "Coloris d’origine";
+      $("prov-detail").textContent = "Aucune automatisation n’a encore modifié la collection.";
+      $("prov-trajet").textContent = t.nom;
+      $("prov-statut").textContent = "Relevé chaque seconde";
+      return;
+    }
+    // « automatiquement » seulement quand l'écriture dit d'où elle vient (champ par) ; sinon, sans l'affirmer.
+    $("prov-titre").textContent = e.par ? "Mis à jour automatiquement" : "Coloris mis à jour";
+    $("prov-detail").textContent = [e.par || "origine non précisée", heure(e.modifieeLe)].filter(Boolean).join(" · ");
+    $("prov-trajet").textContent = ancienne ? `${ancienne.nom} → ${t.nom}` : `Coloris actuel : ${t.nom}`;
+    $("prov-statut").textContent = enCours ? "Teinture en cours…" : "Appliqué aux 4 modèles";
+  }
+  function signaler() {
+    const carte = $("provenance");
+    carte.classList.remove("vient");
+    void carte.offsetWidth;
+    carte.classList.add("vient");
+  }
+  function titre(t, anime, ancienneCouleur) {
+    const el = $("coloris-titre");
+    const texte = `en ${t.nom}`;
+    if (!anime || reduit.matches || !el.animate) { el.textContent = texte; return; }
+    if (ancienneCouleur) el.style.color = ancienneCouleur;
+    const sortie = el.animate([{ opacity: 1, transform: "none", filter: "blur(0)" }, { opacity: 0, transform: "translateY(-.14em)", filter: "blur(5px)" }], { duration: 300, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" });
+    sortie.onfinish = () => {
+      el.textContent = texte;
+      el.style.color = "";
+      el.animate([{ opacity: 0, transform: "translateY(.2em)", filter: "blur(5px)" }, { opacity: 1, transform: "none", filter: "blur(0)" }], { duration: 700, easing: "cubic-bezier(.2,.75,.2,1)" });
+      sortie.cancel();
+    };
+  }
+
+  let courant = null, cible = null, fin = null, minuteurs = [];
+  function terminer() {
+    clearTimeout(fin);
+    minuteurs.forEach(clearTimeout);
+    minuteurs = [];
+    fin = null;
+    for (const s of scenes) {
+      peindre(s.base, cible);
+      legende(s, cible);
+      s.el.classList.add("sans-transition");
+      s.el.classList.remove("en-teinture");
+      s.el.style.setProperty("--avancee", "0");
+    }
+    void document.body.offsetWidth;
+    for (const s of scenes) s.el.classList.remove("sans-transition");
+    $("provenance").classList.remove("en-cours");
+    if (courant?.modifieeLe) $("prov-statut").textContent = "Appliqué aux 4 modèles";
+  }
+  function teindre(t) {
+    if (fin) terminer();
+    cible = t;
+    if (reduit.matches) { terminer(); return; }
+    for (const s of scenes) peindre(s.voile, t);
+    void document.body.offsetWidth;
+    $("barre").animate([{ transform: "scaleX(0)", opacity: 1 }, { transform: "scaleX(1)", opacity: 1, offset: 0.82 }, { transform: "scaleX(1)", opacity: 0 }], { duration: DUREE + DECALAGE * 3 + 500, easing: "cubic-bezier(.65,0,.35,1)" });
+    for (const s of scenes) {
+      s.el.classList.add("en-teinture");
+      s.el.style.setProperty("--avancee", "1");
+      minuteurs.push(setTimeout(() => legende(s, t), s.i * DECALAGE + DUREE * 0.55));
+    }
+    fin = setTimeout(terminer, DUREE + DECALAGE * (scenes.length - 1) + 120);
+  }
+
+  function demarrer() {
+    document.body.classList.add("pret");
+    requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove("demarrage")));
+  }
+  function changer(ancienne, t, e) {
+    if (ancienne.couleur === t.couleur) { provenance(e, t, null, false); signaler(); return; }
+    const couleurTitre = getComputedStyle($("coloris-titre")).color;
+    racine(t); nuancier(e.permises, t.couleur); titre(t, true, couleurTitre);
+    provenance(e, t, ancienne, !reduit.matches); signaler();
+    teindre(t);
+  }
+  // Onglet caché pendant le changement (on regarde le mail) : la teinture attend qu'on revienne sur la page.
+  let differe = null;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || !differe) return;
+    const { ancienne, t, e } = differe;
+    differe = null;
+    setTimeout(() => changer(ancienne, t, e), 450);
+  });
+  function appliquer(e) {
+    const t = teinte(String(e.couleur ?? ""), e.hex);
+    if (!courant) {
+      cible = t;
+      for (const s of scenes) { peindre(s.base, t); peindre(s.voile, t); legende(s, t); }
+      racine(t); titre(t, false); nuancier(e.permises, t.couleur); provenance(e, t, null, false);
+      demarrer();
+    } else if (t.couleur !== courant.t.couleur || e.modifieeLe !== courant.modifieeLe || e.par !== courant.par) {
+      if (document.hidden) differe = { ancienne: differe?.ancienne ?? courant.t, t, e };
+      else if (t.couleur !== courant.t.couleur) changer(courant.t, t, e);
+      else { provenance(e, t, null, false); signaler(); }
+    }
+    courant = { t, modifieeLe: e.modifieeLe, par: e.par };
+  }
+
+  const direct = $("direct");
+  let releveEnCours = false;
   async function relever() {
+    if (releveEnCours) return;
+    releveEnCours = true;
     try {
       const r = await fetch("/collection/etat", { cache: "no-store" });
-      if (!r.ok) return;
-      const e = await r.json();
-      document.documentElement.style.setProperty("--couleur", e.hex);
-      document.getElementById("couleur").textContent = e.couleur;
-      if (actuelle !== null && e.couleur !== actuelle && e.modifieeLe) {
-        const heure = new Date(e.modifieeLe).toLocaleTimeString("fr-FR");
-        toast.textContent = `Coloris passé au ${e.couleur} par « ${e.par || "inconnu"} » à ${heure}`;
-        toast.classList.add("visible");
-        setTimeout(() => toast.classList.remove("visible"), 6000);
-      }
-      actuelle = e.couleur;
-    } catch {}
+      if (!r.ok) throw new Error(String(r.status));
+      appliquer(await r.json());
+      direct.classList.remove("hors-ligne");
+      $("direct-texte").textContent = "En direct";
+    } catch {
+      direct.classList.add("hors-ligne");
+      $("direct-texte").textContent = "Hors ligne";
+    } finally {
+      releveEnCours = false;
+    }
   }
   relever();
   setInterval(relever, 1000);
+  setTimeout(demarrer, 1500);
+})();
 </script>
 </body>
 </html>
