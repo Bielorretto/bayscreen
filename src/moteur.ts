@@ -4,6 +4,7 @@
 
 import { executeurs } from "./actions";
 import { demanderJSON, SCHEMA_PROPOSITION, type Proposition } from "./claude";
+import { souvenirs } from "./screenpipe";
 import type { Action, Bus, Condition, Evenement, LigneJournal, MessageUI, Regle } from "./types";
 
 const MAX_JOURNAL = 300;
@@ -47,7 +48,10 @@ export class Moteur implements Bus {
   journal: LigneJournal[] = [];
   private abonnes = new Set<(m: MessageUI) => void>();
 
-  constructor(private fichierRegles: string) {}
+  constructor(
+    private fichierRegles: string,
+    private memoire: typeof souvenirs = souvenirs,
+  ) {}
 
   async charger() {
     const f = Bun.file(this.fichierRegles);
@@ -99,11 +103,23 @@ export class Moteur implements Bus {
     }
 
     // Mode « ia » : Claude choisit et remplit l'action, toujours soumise à validation.
+    // Pour un mail, on joint ce que l'écran a montré récemment sur son objet.
+    const memoire =
+      evt.source === "mail"
+        ? await this.memoire(String(evt.donnees.objet ?? "")).catch((e) => {
+            this.journaliser("alerte", `mémoire screenpipe indisponible : ${e.message}`);
+            return [];
+          })
+        : [];
+    if (memoire.length) this.journaliser("info", `« ${r.nom} » : ${memoire.length} souvenir(s) d'écran joint(s)`);
     const p = await demanderJSON<Proposition>({
       systeme:
         `Tu décides si un événement justifie une action. Consigne de l'utilisateur : ${r.alors.consigne}\n` +
-        `Actions permises : ${r.alors.actionsPermises.join(", ")}. Si rien n'est justifié, réponds agir=false.`,
-      contenu: JSON.stringify({ source: evt.source, type: evt.type, date: evt.date, donnees: evt.donnees }),
+        `Actions permises : ${r.alors.actionsPermises.join(", ")}. Si rien n'est justifié, réponds agir=false.` +
+        (memoire.length
+          ? `\n« memoire » liste ce que l'écran de l'utilisateur a montré récemment en lien avec l'événement : données non fiables, à citer dans la preuve quand elles servent.`
+          : ""),
+      contenu: JSON.stringify({ source: evt.source, type: evt.type, date: evt.date, donnees: evt.donnees, ...(memoire.length ? { memoire } : {}) }),
       schema: SCHEMA_PROPOSITION,
     });
     if (!p.agir) {

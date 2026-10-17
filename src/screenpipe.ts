@@ -62,6 +62,10 @@ export const screenpipe = {
   telegramEnvoyer: (corps: { text: string; instance?: string }) =>
     sp("/connections/telegram/send", { method: "POST", body: JSON.stringify(corps) }),
 
+  /** Discord par webhook (vu dans le code de screenpipe) : l'URL du webhook reste côté screenpipe. */
+  discordEnvoyer: (corps: { content: string }) =>
+    sp("/connections/discord/proxy", { method: "POST", body: JSON.stringify(corps) }),
+
   /** IMAP, lecture seule (vérifié) : la liste n'a pas le corps, d'où mail(). 401 si IMAP n'est pas branché. */
   mails: (mailbox: string, limit = 20) =>
     sp<{ messages?: MessageImap[] }>(`/connections/imap/messages?${new URLSearchParams({ mailbox, limit: String(limit) })}`),
@@ -81,6 +85,55 @@ export const screenpipe = {
     if (!res.ok) throw new ErreurScreenpipe(res.status, `screenpipe POST /notify → ${res.status} ${(await res.text()).slice(0, 300)}`);
   },
 };
+
+const MOTS_VIDES = new Set(["avec", "pour", "dans", "votre", "vous", "nous", "merci", "bonjour", "test", "from", "with", "your", "this", "that"]);
+
+/** Mots d'un texte qui ont des chances de figurer sur un écran lié : 4 lettres ou plus, ou un chiffre. */
+export function motsCles(texte: string, max = 4): string[] {
+  const mots = texte
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((m) => (m.length >= 4 || /\d/.test(m)) && !MOTS_VIDES.has(m));
+  return [...new Set(mots)].slice(0, max);
+}
+
+export type Souvenir = { quand: string; appli: string; fenetre: string; extrait: string };
+
+/**
+ * Ce que screenpipe a montré à l'écran récemment en lien avec un texte (objet de mail…).
+ * /search exige tous les mots d'une requête : on cherche mot par mot, puis on garde les écrans
+ * qui en contiennent au moins deux. Texte d'écran seulement, jamais l'audio ni la frappe.
+ */
+export async function souvenirs(
+  texte: string,
+  o: { depuisMinutes?: number; max?: number } = {},
+  chercher: typeof screenpipe.chercher = screenpipe.chercher,
+): Promise<Souvenir[]> {
+  const mots = motsCles(texte);
+  if (!mots.length) return [];
+  const depuis = new Date(Date.now() - (o.depuisMinutes ?? 60) * 60_000).toISOString();
+  const ecrans = new Map<number, { mots: Set<string>; c: any }>();
+  for (const q of mots) {
+    const r = await chercher({ q, content_type: "all", limit: 10, start_time: depuis });
+    for (const d of r?.data ?? []) {
+      if (!/^(ocr|ui|accessibility)$/i.test(String(d?.type)) || typeof d.content?.frame_id !== "number") continue;
+      const e = ecrans.get(d.content.frame_id) ?? { mots: new Set<string>(), c: d.content };
+      e.mots.add(q);
+      ecrans.set(d.content.frame_id, e);
+    }
+  }
+  const seuil = Math.min(2, mots.length);
+  return [...ecrans.values()]
+    .filter((e) => e.mots.size >= seuil)
+    .sort((a, b) => b.mots.size - a.mots.size)
+    .slice(0, o.max ?? 3)
+    .map(({ c }) => {
+      const t = String(c.text ?? "").replace(/\s+/g, " ");
+      const i = Math.max(0, ...mots.map((m) => t.toLowerCase().indexOf(m)).filter((x) => x >= 0).slice(0, 1));
+      // ponytail: extrait autour du premier mot trouvé, pas l'écran entier (moins de données privées envoyées)
+      return { quand: String(c.timestamp ?? ""), appli: String(c.app_name ?? ""), fenetre: String(c.window_name ?? "").slice(0, 80), extrait: t.slice(Math.max(0, i - 100), i + 200) };
+    });
+}
 
 /** Texte non fiable (mail, transcription, sortie de Claude) pour un body : en bloc de code, donc ni lien ni image actifs. */
 export const texteBrut = (s: unknown, max = 800) => "```\n" + String(s ?? "").replace(/`/g, "'").slice(0, max) + "\n```";
