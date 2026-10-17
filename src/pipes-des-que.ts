@@ -37,6 +37,7 @@ export const EVENEMENTS: Record<string, { champs: string[] | null; sens: string;
   "screenpipe/meeting_started": { champs: ["meeting_id", "app", "title", "detection_source"], sens: "une visio commence", contexte: ["meeting_id"], texte: ["title"] },
   // Vérifié en réel : meeting_ended n'a ni app ni title (docs/SCREENPIPE.md).
   "screenpipe/meeting_ended": { champs: ["meeting_id", "duration_secs", "meeting_end", "transcript_segments"], sens: "une visio se termine (sans app ni titre)", contexte: ["meeting_id", "duration_secs", "transcript_segments"], texte: [] },
+  "screenpipe/app_active": { champs: ["app", "fenetre", "capture"], sens: "l'application ou le document actif change ; app = nom de l'application active (ex. Microsoft Word), fenetre = titre de sa fenêtre, souvent le nom du document ouvert", contexte: [], texte: ["app", "fenetre"] },
   // transcription y est une liste de lignes (copilote.ts), pas un texte : rien à en extraire tant qu'elle n'est pas mise à plat.
   "appel/visio_terminee": { champs: ["meetingId", "app", "nbLignes", "transcription"], sens: "fin de visio vue par le copilote, avec l'appli et la transcription", contexte: ["meetingId", "nbLignes"], texte: [] },
   "webhook/*": { champs: null, sens: "toute donnée envoyée à POST /api/evenements avec la source webhook", contexte: [], texte: [] },

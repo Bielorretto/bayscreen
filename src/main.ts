@@ -9,6 +9,7 @@ import { ecouterEvenements, screenpipe } from "./screenpipe";
 import { demarrerServeur } from "./serveur";
 import { surveillerMails, type SourceMail } from "./sources/mail";
 import { surveillerPage, type SourceWeb } from "./sources/web";
+import { surveillerApp } from "./sources/app";
 
 /** Événements screenpipe transmis au moteur de règles (les autres ne servent qu'au copilote). */
 const TYPES_POUR_LE_MOTEUR = new Set(["meeting_started", "meeting_ended", "workflow_event", "connection_trigger"]);
@@ -34,6 +35,9 @@ if (await fichierSources.exists()) {
     if (s.type === "mail") surveillerMails(s, moteur);
   }
 }
+
+// Source « application active » : l'appli/fenêtre à l'écran, pour les « dès que j'ouvre X ».
+if (config.screenpipeCle) surveillerApp(moteur);
 
 // Pont « dès que » : surveillance automatique des pipes screenpipe. L'utilisateur
 // crée sa pipe dans l'app avec un déclencheur « dès que » (trigger.custom) : elle est
