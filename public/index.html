@@ -224,6 +224,12 @@
       <div id="taches" class="liste" style="margin-top:8px"></div>
       <button class="discret" style="margin-top:6px" onclick="chargerAutomatisables()">Actualiser</button>
     </section>
+    <section style="margin-top:16px">
+      <h2>Pipes screenpipe (« dès que »)</h2>
+      <p class="doux">Les pipes avec un déclencheur « dès que » (que screenpipe n'évalue pas) sont branchées ici sur de vrais événements.</p>
+      <button onclick="synchroniserPipes()">Brancher les pipes</button>
+      <div id="pipes-rapport" style="margin-top:8px"></div>
+    </section>
   </div>
   <div>
     <section id="visio">
@@ -418,6 +424,27 @@ async function creerRegle(i) {
   alert(`Règle créée : ${t.regle.nom}`);
 }
 chargerAutomatisables();
+
+async function synchroniserPipes() {
+  $("pipes-rapport").textContent = "Traduction des déclencheurs en cours…";
+  let j;
+  try {
+    const r = await fetch("/api/pipes/synchroniser", { method: "POST" });
+    j = await r.json();
+  } catch {
+    $("pipes-rapport").textContent = "serveur injoignable";
+    return;
+  }
+  if (!j.ok) { $("pipes-rapport").textContent = "erreur : " + (j.erreur ?? "?"); return; }
+  $("pipes-rapport").innerHTML = (j.rapports ?? []).map((p) => {
+    if (p.statut === "branchee") {
+      const si = (p.regle.desQue.si ?? []).map((c) => `${esc(c.champ)} ${esc(c.op)} ${esc(c.valeur)}`).join(" et ");
+      return `<div class="item"><b>${esc(p.pipe)}</b> branchée — dès que ${esc(p.regle.desQue.source)}/${esc(p.regle.desQue.type)}${si ? ` (${si})` : ""} → pipe.lancer</div>`;
+    }
+    if (p.statut === "deja") return `<div class="item"><b>${esc(p.pipe)}</b> déjà branchée</div>`;
+    return `<div class="item"><b>${esc(p.pipe)}</b> non branchée — ${esc(p.motif ?? p.statut)}</div>`;
+  }).join("") || '<p class="doux">Aucune pipe avec un déclencheur « dès que ».</p>';
+}
 
 function connecter() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
