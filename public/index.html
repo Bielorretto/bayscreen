@@ -153,6 +153,9 @@
 
   /* Assistant de visio. Au réveil : cadre encre, et le seul point phosphor de la page tant qu'il écoute */
   #visio.reveil { border-color: hsl(var(--foreground)); box-shadow: 0 0 0 1px hsl(var(--foreground)); }
+  /* Action qui vient d'arriver : même cadre que l'assistant réveillé ; son texte en grand, avant les paramètres bruts */
+  #attente .item.nouvelle { box-shadow: inset 0 0 0 2px hsl(var(--foreground)); }
+  #attente .item > .message { margin-top: 4px; font-size: 15px; line-height: 22px; color: hsl(var(--foreground)); white-space: pre-wrap; }
   #ecoute { display: none; }
   #visio.reveil #ecoute { display: flex; align-items: center; gap: 8px; padding: 10px 16px;
     border-top: 1px solid hsl(var(--border)); font: 500 12px/16px var(--font-mono); }
@@ -298,7 +301,7 @@ const debloquerAudio = () => {
 };
 document.addEventListener("click", debloquerAudio);
 document.addEventListener("keydown", debloquerAudio);
-function bip() {
+function bip(texte = "L'assistant vous écoute") {
   try {
     const ctx = audio ?? new AudioContext();
     if (ctx.state === "suspended") ctx.resume();
@@ -308,15 +311,22 @@ function bip() {
   } catch {}
   try {
     if (typeof Notification !== "undefined" && Notification.permission === "granted")
-      new Notification("Dès que", { body: "L'assistant vous écoute" });
+      new Notification("Dès que", { body: texte });
   } catch {}
 }
+
+// Ce que fait l'action, en mots : la carte se lit d'un coup d'œil, à l'écran comme en vidéo.
+const LIBELLES = { notifier: "Notification", "slack.envoyer": "Message Slack", "telegram.envoyer": "Message Telegram",
+  "discord.envoyer": "Message Discord", webhook: "Webhook", ouvrir: "Ouvrir une page", "pipe.lancer": "Lancer une pipe", "pipe.brancher": "Brancher une pipe" };
+const nouvelles = new Set(); // actions arrivées depuis l'ouverture de la page, mises en évidence jusqu'au clic
 
 function rendreActions() {
   const toutes = [...actions.values()].sort((a, b) => b.creeeLe.localeCompare(a.creeeLe));
   const attente = toutes.filter((a) => a.statut === "proposee");
   $("attente").innerHTML = attente.length ? attente.map((a) => `
-    <div class="item"><b>${esc(a.nom)}</b> <code>${esc(JSON.stringify(a.params))}</code>
+    <div class="item${nouvelles.has(a.id) ? " nouvelle" : ""}"><b>${esc(LIBELLES[a.nom] ?? a.nom)}</b>
+      ${a.params.content ?? a.params.text ?? a.params.url ? `<div class="message">${esc(a.params.content ?? a.params.text ?? a.params.url)}</div>` : ""}
+      <code>${esc(JSON.stringify(a.params))}</code>
       ${a.preuve ? `<div class="doux">Preuve : ${esc(a.preuve)}</div>` : ""}
       <div class="actions" style="margin-top:6px"><button class="ok" onclick="agir('${a.id}','valider')">Valider</button>
       <button class="ko" onclick="agir('${a.id}','refuser')">Refuser</button></div></div>`).join("") : '<p class="doux">Rien en attente.</p>';
@@ -342,7 +352,14 @@ async function agir(id, verbe) {
 function recevoir(m) {
   switch (m.type) {
     case "etat": m.actions.forEach((a) => actions.set(a.id, a)); journal = m.journal; rendreRegles(m.regles); rendreActions(); rendreJournal(); break;
-    case "action": actions.set(m.action.id, m.action); rendreActions(); break;
+    case "action": {
+      const arrivee = m.action.statut === "proposee" && !actions.has(m.action.id);
+      actions.set(m.action.id, m.action);
+      if (arrivee) nouvelles.add(m.action.id);
+      rendreActions();
+      if (arrivee) { bip(`${LIBELLES[m.action.nom] ?? m.action.nom} à valider`); $("attente").scrollIntoView({ behavior: "smooth", block: "center" }); }
+      break;
+    }
     case "journal": journal.push(m.ligne); rendreJournal(); break;
     case "visio":
       $("etat-visio").textContent = m.active ? `visio en cours${m.app ? " · " + m.app : ""}` : "pas de visio";
