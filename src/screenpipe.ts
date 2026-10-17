@@ -69,6 +69,39 @@ export const screenpipe = {
     sp<{ body?: string }>(`/connections/imap/messages/${id}?${new URLSearchParams({ mailbox })}`),
 
   lancerPipe: (id: string) => sp(`/pipes/${encodeURIComponent(id)}/run`, { method: "POST", body: "{}" }),
+
+  /** Notification dans l'appli screenpipe : sidecar Tauri, port 11435, sans clé (vérifié : 200). Jusqu'à 5 boutons. */
+  notifier: async (n: NotificationScreenpipe) => {
+    const res = await fetch("http://localhost:11435/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(n),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) throw new ErreurScreenpipe(res.status, `screenpipe POST /notify → ${res.status} ${(await res.text()).slice(0, 300)}`);
+  },
+};
+
+export type BoutonNotification = {
+  id: string;
+  label: string;
+  /** api : appelle url ; pipe : lance le pipe nommé, context injecté dans sa consigne ; chat : lance prompt dans le chat */
+  type: "api" | "pipe" | "chat" | "deeplink" | "dismiss";
+  url?: string;
+  pipe?: string;
+  prompt?: string;
+  context?: Record<string, unknown>;
+};
+
+export type NotificationScreenpipe = {
+  title: string;
+  /** Markdown : y échapper tout texte non fiable (mail, transcription). */
+  body?: string;
+  pipe_name: string;
+  priority?: "high" | "normal" | "low";
+  /** 0 : reste affichée ; 20 par défaut */
+  timeout_secs?: number;
+  actions?: BoutonNotification[];
 };
 
 export type EvenementBrut = { name: string; data: any };
