@@ -1,6 +1,10 @@
 {
   "project_name": "bayscreen-des-que",
-  "members": ["abel", "bielorretto"],
+  "members": [
+    "abel",
+    "bielorretto",
+    "newbiecae"
+  ],
   "integration_owner": "abel",
   "shared_branch": "main",
   "default_language": "fr"

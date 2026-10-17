@@ -102,6 +102,29 @@ class KitTests(unittest.TestCase):
         self.assertIn("NON FIABLES", data["hookSpecificOutput"]["additionalContext"])
         self.assertIn("Salut équipe", data["hookSpecificOutput"]["additionalContext"])
 
+    def test_sync_coordination_between_clones(self):
+        git = lambda cwd, *a: subprocess.run(["git", "-C", str(cwd), *a], check=True, capture_output=True)
+        remote = Path(self.tmp.name) / "remote.git"
+        git(self.tmp.name, "init", "-q", "--bare", str(remote))
+        git(self.root, "add", "-A"); git(self.root, "commit", "-qm", "kit"); git(self.root, "branch", "-M", "main")
+        git(self.root, "remote", "add", "origin", str(remote)); git(self.root, "push", "-q", "origin", "main")
+        other = Path(self.tmp.name) / "autre"
+        git(self.tmp.name, "clone", "-q", str(remote), str(other))
+        git(other, "config", "user.name", "Test2"); git(other, "config", "user.email", "test2@example.invalid")
+        sync = lambda root: subprocess.run(["bash", str(root / "scripts" / "sync-coordination.sh"), "une-fois"], capture_output=True, text=True)
+        self.assertEqual(0, self.send().returncode)
+        r = sync(self.root); self.assertEqual(0, r.returncode, r.stderr)
+        r = sync(other); self.assertEqual(0, r.returncode, r.stderr)
+        env = dict(self.env, HACKATHON_MEMBER="membre2", HACKATHON_AGENT_ID="membre2/pc")
+        inbox = subprocess.run([sys.executable, str(other / "scripts" / "messages.py"), "inbox"], capture_output=True, text=True, env=env)
+        self.assertIn("Salut équipe", inbox.stdout)
+        # Réponse dans l'autre sens, et main jamais touchée par la synchronisation
+        r = subprocess.run([sys.executable, str(other / "scripts" / "messages.py"), "send", "--to", "membre1", "--text", "Bien reçu"], capture_output=True, text=True, env=env)
+        self.assertEqual(0, r.returncode, r.stderr)
+        sync(other); sync(self.root)
+        self.assertIn("Bien reçu", self.call("inbox").stdout)
+        self.assertEqual(1, len(subprocess.run(["git", "-C", str(remote), "log", "--oneline", "main"], capture_output=True, text=True).stdout.splitlines()))
+
     def test_settings_json_valid(self):
         p=SOURCE / '.claude' / 'settings.example.json'
         x=json.loads(p.read_text())

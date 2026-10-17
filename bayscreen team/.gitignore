@@ -15,3 +15,6 @@ local/
 secrets/
 *.pem
 *.key
+
+# Messages : ils voyagent par la branche coordination (scripts/sync-coordination.sh), pas par main
+coordination/messages/*.json
