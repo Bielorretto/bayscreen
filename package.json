@@ -7,7 +7,8 @@
     "start": "bun src/main.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "evt": "bun scripts/evenement.ts"
+    "evt": "bun scripts/evenement.ts",
+    "test:complet": "bun scripts/test-complet.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0"
