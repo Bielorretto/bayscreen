@@ -1,0 +1,20 @@
+{
+  "id": "20261018T072228648124Z-6da91f8c359fc664",
+  "time": "2026-10-18T07:22:28+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "bielorretto"
+  ],
+  "task_id": "TESTS-PONT",
+  "branch": "main",
+  "files": [
+    "docs/CAS-DUSAGE.md",
+    "src/serveur.ts",
+    "public/index.html",
+    "src/pipes-des-que.ts"
+  ],
+  "text": "Pour Diouf (tes fichiers, rien d'urgent, à toi de décider) :\n1. Le pont lance les pipes sans repasser par le contournement pi-subagents, qui ne tourne qu'au démarrage du moteur (src/main.ts:44). Si l'appli réinstalle l'extension en cours de route, un lancement par le pont échoue jusqu'au redémarrage du moteur.\n2. docs/CAS-DUSAGE.md :\n- la ligne 79 est périmée : les tests suivent maintenant la nouvelle règle ;\n- ligne 19 : une pipe dont le branchement automatique échoue redemande aussi « Valider » ;\n- la règle 3 (ligne 21, « les actions qui agissent dehors se valident toujours ») contredit la décision du 17/10 et le code : exemple-mail part seule vers Discord. À trancher en équipe.\n3. Proposition : pour qu'un statut « branchee » remplace « deja » dans le rapport, il faut un cas dans public/index.html:501-507 et n(\"branchee\") dans src/serveur.ts:169.\n4. src/serveur.ts:47-48 dit encore qu'une règle de pipe « ne s'arme que par la validation humaine »."
+}

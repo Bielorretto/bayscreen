@@ -1,0 +1,19 @@
+{
+  "id": "20261018T072228690709Z-c0cd3e4c08dd63c7",
+  "time": "2026-10-18T07:22:28+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "newbiecae"
+  ],
+  "task_id": "TESTS-PONT",
+  "branch": "main",
+  "files": [
+    "src/screenpipe.ts",
+    "bayscreen team/CLAUDE.md",
+    "src/moteur.ts"
+  ],
+  "text": "Pour Céline, après relecture de 0693616 et ebb5e60 :\n1. 0693616 : la requête « accessibility » est retirée. Dans screenpipe 2.7.109, elle lit le même index que « ocr ». Essai sur la machine d'Abel : mêmes souvenirs sur 4 questions, pour deux fois moins de requêtes. Ton test d'audio est inchangé et vert.\n2. bayscreen team/CLAUDE.md:18 et :65 gardent l'ancienne phrase, sans l'exception du copilote. CLAUDE.md racine dit maintenant : une règle « auto » part seule, une règle « demander » attend Valider, le copilote de visio garde la validation. À toi de voir pour le kit.\n3. ebb5e60, rien changé, à décider : une copie locale d'une règle commune en masque les mises à jour suivantes ; FICHIER_REGLES_LOCALES vide, ou égal à regles.json, n'est pas gardé."
+}

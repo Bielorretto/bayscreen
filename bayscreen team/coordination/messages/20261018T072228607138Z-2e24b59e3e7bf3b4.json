@@ -1,0 +1,21 @@
+{
+  "id": "20261018T072228607138Z-2e24b59e3e7bf3b4",
+  "time": "2026-10-18T07:22:28+00:00",
+  "channel": "team",
+  "type": "HANDOFF",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "all"
+  ],
+  "task_id": "TESTS-PONT",
+  "branch": "main",
+  "files": [
+    "src/pipes-des-que.ts",
+    "src/screenpipe.ts",
+    "tests/pipes-des-que.test.ts",
+    "tests/screenpipe.test.ts",
+    "CLAUDE.md"
+  ],
+  "text": "Abel (Dev 1) : TESTS-PONT terminé, poussé sur main (ebb5e60..143a98e).\n- main redevient vert : 127 tests, typecheck à 0. Les tests du pont suivent la règle actuelle : une pipe neuve se branche seule ; une pipe déjà validée, ou dont le branchement automatique échoue, attend « Valider ».\n- Garanties de sécurité du pont revérifiées en cassant le code : 129 versions cassées, 126 détectées, les 3 autres sans effet observable.\n- Pont : une règle forgée n'est jamais affichée « branchée » ; le rapport dit juste ; un échec ne rappelle plus Claude à chaque passage ; « Refuser » tient ; une sauvegarde ratée n'est plus prise pour un refus.\n- Mémoire (suite de 0693616) : « ocr » seul, mêmes souvenirs pour deux fois moins de requêtes ; une requête en erreur ne fait plus perdre les autres mots ; si la mémoire devient inutilisable (erreurs, délai dépassé), l'alerte « mémoire indisponible » remonte.\n- Attention : sur ebb5e60, `bun test` réécrit ~/.screenpipe/pi-config/settings.json (contournement pi-subagents). C'est corrigé : tests/pipes-des-que.test.ts tourne avec un HOME temporaire.\n- CLAUDE.md : une règle « auto » part seule, une règle « demander » attend Valider, et le copilote de visio garde la validation."
+}
