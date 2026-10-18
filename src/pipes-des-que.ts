@@ -175,7 +175,7 @@ const SCHEMA_TRADUCTION = {
         {
           type: "object",
           properties: {
-            minutes: { type: "number", description: "délai, de 0.5 à 14400 (10 jours)" },
+            minutes: { type: "number", description: "délai en minutes, de 0.0833 (5 secondes) à 14400 (10 jours) ; convertis secondes, heures et jours en minutes" },
             cle: { type: "string", description: "champ référence qui identifie la personne ou le fil (ex. expediteur) : un nouvel événement de même clé annule l'attente" },
           },
           required: ["minutes", "cle"],

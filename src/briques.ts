@@ -83,7 +83,7 @@ export function verifierBriques(brut: Record<string, unknown>, c: CadreBriques):
   let attente: Attente | null = null;
   if (brut.attente != null) {
     const a = brut.attente as Record<string, unknown>;
-    if (typeof a.minutes !== "number" || !(a.minutes >= 0.5 && a.minutes <= 14_400)) return { ok: false, motif: "attente : minutes de 0,5 à 14 400 (10 jours)" };
+    if (typeof a.minutes !== "number" || !(a.minutes >= 5 / 60 && a.minutes <= 14_400)) return { ok: false, motif: "attente : de 5 secondes (0,0833 min) à 14 400 min (10 jours)" };
     if (typeof a.cle !== "string" || !c.references.includes(a.cle)) return { ok: false, motif: `attente : clé parmi ${c.references.join(", ") || "aucun"}` };
     attente = { minutes: a.minutes, cle: a.cle };
   }
