@@ -855,7 +855,11 @@ executeurs["pipe.lancer"] = async (params, bus) => {
   let contexte: Record<string, string> = Object.fromEntries(b.transmettre.map((c) => [c, ligneSure(refs[c])]));
   if (b.session) {
     const s = briques.suivreSession(pipe, b.session, refs);
-    if ("motif" in s) return { lancee: false, motif: s.motif };
+    if ("motif" in s) {
+      // Une session finie trop courte se dit au journal (sinon « rien ne s'est lancé » reste muet) ; les autres changements d'appli non.
+      if (s.motif.startsWith("session de")) bus.journaliser("info", `pipe « ${pipe} » : ${s.motif}`);
+      return { lancee: false, motif: s.motif };
+    }
     contexte = { ...contexte, ...s.contexte }; // l'appli et le document de la session finie, pas ceux qu'on vient d'ouvrir
     bus.journaliser("info", `pipe « ${pipe} » : session de ${s.contexte.minutes} min dans ${b.session.app} terminée`);
   }
