@@ -130,10 +130,13 @@ export async function souvenirs(
   if (!mots.length) return [];
   const depuis = new Date(Date.now() - (o.depuisMinutes ?? 60) * 60_000).toISOString();
   const ecrans = new Map<number, { mots: Set<string>; c: any }>();
-  // Texte d'écran demandé à screenpipe : avec « all », l'audio (capté en permanence) remplit les 10 places.
-  const recherches = mots.flatMap((q) => ["ocr", "accessibility"].map((content_type) => ({ q, content_type })));
-  for (const { q, content_type } of recherches) {
-    const r = await chercher({ q, content_type, limit: 10, start_time: depuis });
+  // Texte d'écran seulement (« ocr ») : avec « all », l'audio (capté en permanence) remplit les 10 places. « ocr » porte
+  // aussi le texte d'accessibilité ; « accessibility » renverrait les mêmes écrans, sans frame_id. Une requête par mot : une
+  // requête en erreur ne fait perdre que les écrans de son mot ; si toutes échouent (screenpipe arrêté, clé refusée),
+  // l'erreur remonte, et l'appelant alerte « mémoire screenpipe indisponible ».
+  const erreurs: unknown[] = [];
+  for (const q of mots) {
+    const r = await chercher({ q, content_type: "ocr", limit: 10, start_time: depuis }).catch((e) => (erreurs.push(e), null));
     for (const d of r?.data ?? []) {
       if (!/^(ocr|ui|accessibility)$/i.test(String(d?.type)) || typeof d.content?.frame_id !== "number") continue;
       const e = ecrans.get(d.content.frame_id) ?? { mots: new Set<string>(), c: d.content };
@@ -141,6 +144,7 @@ export async function souvenirs(
       ecrans.set(d.content.frame_id, e);
     }
   }
+  if (erreurs.length === mots.length) throw erreurs[0];
   const seuil = Math.min(2, mots.length);
   const fenetresVues = new Set<string>();
   return [...ecrans.values()]

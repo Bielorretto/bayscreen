@@ -51,6 +51,37 @@ describe("mémoire", () => {
     expect(s.map((x) => x.extrait)).toEqual([expect.stringContaining("89 €")]);
   });
 
+  test("une requête d'écran par mot : content_type « ocr » seul, qui porte aussi le texte d'accessibilité", async () => {
+    const demandes: Record<string, unknown>[] = [];
+    const s = await souvenirs("Devis n° 42 à valider", {}, async (p) => {
+      demandes.push(p);
+      return chercher(p);
+    });
+    expect(demandes.map((p) => [p.q, p.content_type, p.limit])).toEqual([["devis", "ocr", 10], ["42", "ocr", 10], ["valider", "ocr", 10]]);
+    expect(demandes.every((p) => typeof p.start_time === "string")).toBe(true);
+    expect(s).toHaveLength(1);
+  });
+
+  test("une requête /search en erreur ne fait pas perdre les souvenirs des autres mots", async () => {
+    // screenpipe occupé pour le premier mot (503 « search is busy ») : les mots suivants sont cherchés, et leurs écrans restent.
+    const demandes: unknown[] = [];
+    const s = await souvenirs("Devis n° 42 casques", {}, async (p) => {
+      demandes.push(p.q);
+      if (p.q === "devis") throw new Error('screenpipe GET /search?q=devis&content_type=ocr → 503 {"error":"search is busy"}');
+      return chercher(p);
+    });
+    expect(demandes).toEqual(["devis", "42", "casques"]);
+    expect(s).toHaveLength(1);
+    expect(s[0]!.extrait).toContain("1 290 €");
+  });
+
+  test("screenpipe injoignable (toutes les requêtes en erreur) : souvenirs échoue, pour que l'appelant alerte « mémoire indisponible »", async () => {
+    const s = souvenirs("Devis n° 42 à valider", {}, async () => {
+      throw new Error("screenpipe GET /search → 403 clé refusée (simulé)");
+    });
+    await expect(s).rejects.toThrow("403 clé refusée");
+  });
+
   test("un souvenir par fenêtre : un éditeur ouvert ne chasse pas la page du devis", async () => {
     const editeur = (id: number) => ({ ...ecran(id, "devis 42 valider : notes de travail"), content: { ...ecran(id, "devis 42 valider : notes de travail").content, app_name: "Éditeur" } });
     const data = [editeur(20), editeur(21), editeur(22), ecran(1, "Devis n° 42 — Total : 1 290 €")];
