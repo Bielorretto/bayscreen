@@ -163,5 +163,333 @@
       }
     },
     "validation": "auto"
+  },
+  {
+    "id": "bonjour-claude",
+    "nom": "Mail d'Etto → notification bonjour",
+    "active": true,
+    "desQue": {
+      "source": "mail",
+      "type": "mail_recu"
+    },
+    "alors": {
+      "mode": "ia",
+      "consigne": "Regarde UNIQUEMENT l'expéditeur du mail (le champ expediteur). S'il s'agit d'Etto (le nom affiché contient « Etto »), propose l'action notifier avec le message « bonjour », quel que soit le contenu du mail. Sinon, ne propose rien. Ignore complètement le corps et l'objet du mail.",
+      "actionsPermises": [
+        "notifier"
+      ]
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-prix-alerte-pipe",
+    "nom": "Alerte prix casque — dès que (pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "Casque audio"
+        },
+        {
+          "champ": "valeur",
+          "op": "superieur",
+          "valeur": "140"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "prix-alerte-pipe",
+        "evenement": {
+          "valeur": "{{valeur}}",
+          "ancienne": "{{ancienne}}"
+        }
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-prix-alerte-2",
+    "nom": "Alerte prix bas — dès que (pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "Casque audio"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": "100"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "prix-alerte-2",
+        "evenement": {
+          "valeur": "{{valeur}}",
+          "ancienne": "{{ancienne}}"
+        }
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-alerte-prix-chat",
+    "nom": "Alerte prix chat — dès que (pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "Casque audio"
+        },
+        {
+          "champ": "valeur",
+          "op": "superieur",
+          "valeur": "140"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "alerte-prix-chat",
+        "evenement": {
+          "valeur": "{{valeur}}",
+          "ancienne": "{{ancienne}}"
+        }
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-verifier-sources-pages",
+    "nom": "Vérifier mes sources — dès que (pipe screenpipe)",
+    "active": false,
+    "desQue": {
+      "source": "screenpipe",
+      "type": "app_active"
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "verifier-sources-pages",
+        "briques": {
+          "sens": null,
+          "session": {
+            "app": "Pages",
+            "minutes": 1
+          },
+          "attente": null,
+          "transmettre": [
+            "app",
+            "fenetre"
+          ]
+        },
+        "references": {
+          "app": "{{app}}",
+          "fenetre": "{{fenetre}}"
+        }
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-remplir-documents-administratifs",
+    "nom": "Remplir les documents administratifs — dès que (pipe screenpipe)",
+    "active": false,
+    "desQue": {
+      "source": "screenpipe",
+      "type": "app_active"
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "remplir-documents-administratifs",
+        "briques": {
+          "sens": {
+            "question": "Le document ouvert est-il un document administratif (formulaire, demande, attestation, dossier de caisse d'allocations, impôts, assurance, mairie…) que l'on doit remplir ?",
+            "depuis": [
+              "app",
+              "fenetre"
+            ],
+            "apps": [
+              "Preview",
+              "Aperçu",
+              "Acrobat",
+              "Adobe Acrobat",
+              "Adobe Reader",
+              "Word",
+              "Microsoft Word",
+              "Pages",
+              "Foxit",
+              "PDF Expert"
+            ],
+            "ecran": true
+          },
+          "session": null,
+          "attente": null,
+          "transmettre": [
+            "app",
+            "fenetre"
+          ]
+        },
+        "references": {
+          "app": "{{app}}",
+          "fenetre": "{{fenetre}}"
+        }
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-remplir-document-admin",
+    "nom": "Remplir mes documents administratifs — dès que (pipe screenpipe)",
+    "active": false,
+    "desQue": {
+      "source": "screenpipe",
+      "type": "app_active"
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "remplir-document-admin",
+        "briques": {
+          "sens": {
+            "question": "La fenêtre ouverte est-elle un document administratif à remplir (formulaire, demande, déclaration, dossier, attestation) ?",
+            "depuis": [
+              "fenetre"
+            ],
+            "apps": [
+              "Preview",
+              "Aperçu",
+              "Acrobat",
+              "Adobe",
+              "Reader",
+              "Word",
+              "Pages",
+              "PDF",
+              "Chrome",
+              "Safari",
+              "Firefox"
+            ],
+            "ecran": true
+          },
+          "session": null,
+          "attente": null,
+          "transmettre": [
+            "app",
+            "fenetre"
+          ]
+        },
+        "references": {
+          "fenetre": "{{fenetre}}",
+          "app": "{{app}}"
+        }
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-verifier-mes-sources",
+    "nom": "Vérifier mes sources — dès que (pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "screenpipe",
+      "type": "app_active"
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "verifier-mes-sources",
+        "briques": {
+          "sens": null,
+          "session": {
+            "app": "Pages",
+            "minutes": 1
+          },
+          "attente": null,
+          "transmettre": [
+            "app",
+            "fenetre"
+          ]
+        },
+        "references": {
+          "app": "{{app}}",
+          "fenetre": "{{fenetre}}"
+        }
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-preparer-copie-apl",
+    "nom": "Préparer en coulisses la copie remplie de l'APL — dès que (pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "screenpipe",
+      "type": "app_active",
+      "si": [
+        {
+          "champ": "fenetre",
+          "op": "contient",
+          "valeur": "Obay Screen · Bienvenue"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "preparer-copie-apl"
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "pipe-des-que-obay-cas2-apl",
+    "nom": "Remplir la demande APL (Obay Cas 2) — dès que (pipe screenpipe)",
+    "active": true,
+    "desQue": {
+      "source": "screenpipe",
+      "type": "app_active",
+      "si": [
+        {
+          "champ": "fenetre",
+          "op": "contient",
+          "valeur": "Obay Screen · Cas 2 : papiers administratifs"
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "pipe.lancer",
+      "params": {
+        "pipe": "obay-cas2-apl"
+      }
+    },
+    "validation": "auto"
   }
 ]
