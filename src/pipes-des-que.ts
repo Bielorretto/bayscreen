@@ -20,6 +20,7 @@ import { executeurs, lancerPipe } from "./actions";
 import * as briques from "./briques";
 import { SANS_BRIQUES, briquesActives, champsBriques, ligneSure, resumeBriques, verifierBriques, type Briques } from "./briques";
 import { demanderJSON } from "./claude";
+import { degagerExtensionIncompatible } from "./fixes/pi-subagents";
 import { config } from "./config";
 import { Moteur, regleCorrespond } from "./moteur";
 import { sp } from "./screenpipe";
@@ -917,6 +918,8 @@ async function partir(pipe: string, regle: Regle, texte: string, evenementParams
   // Claude a pu prendre jusqu'à 30 s : une règle arrêtée ou remplacée entre-temps ne lance plus rien.
   if (ex.length && !bus.regles.includes(regle)) throw new Error("règle arrêtée ou modifiée pendant l'extraction : non lancée");
   const evenement = { ...nombresTransmis(regle, evenementParams), ...extraites, ...contexte };
+  // Contournement bug screenpipe (fixes/pi-subagents.ts) : l'appli remet l'extension pi-subagents, qui tue l'agent des pipes au chargement.
+  await degagerExtensionIncompatible((n, m) => bus.journaliser(n, m));
   return lancerPipe(pipe, { run_context: { source: "des-que", condition: texte, evenement, consigne: CONSIGNE_ACCES } }, bus);
 }
 
