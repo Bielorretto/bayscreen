@@ -133,8 +133,9 @@ test("synchronisation : une pipe neuve se branche seule, sans nouvel appel si in
   traduction = { possible: true, evenement: "web/valeur_changee", si, essais: [declenche, reste], motif_refus: "" };
   pipes = [{ config: { name: "alerte-casque", title: "Alerte casque", enabled: true, trigger: { custom: "dès que le casque passe sous 90 €" } } }];
 
-  // Pipe neuve : traduite, puis branchée seule (la phrase dans le chat vaut validation) ; rien n'attend de clic.
-  await synchroniserAutomatiquement(moteur);
+  // Pipe neuve : traduite, puis branchée seule (la phrase dans le chat vaut validation) ; rien n'attend de clic. Le rapport
+  // ne dit pas « à valider » : déjà traitée, comme aux synchronisations suivantes.
+  expect((await synchroniserAutomatiquement(moteur)).map((r) => [r.pipe, r.statut])).toEqual([["alerte-casque", "deja"]]);
   expect(appelsClaude).toBe(1);
   // Claude borné : une synchronisation n'attend pas plus de 45 s, une nouvelle tentative au plus.
   expect(demandeClaude).toMatchObject({ delaiMs: 45_000, nouvellesTentatives: 1 });
@@ -513,7 +514,7 @@ test("synchronisation : les règles à arrêter le sont, et sauvegardées, avant
     liberer(); // même en échec : sinon la file des synchronisations resterait bloquée pour les tests suivants
   }
   expect((await passage).map((r) => [r.pipe, r.statut])).toEqual([
-    ["desarme-nouvelle", "a_valider"],
+    ["desarme-nouvelle", "deja"], // pipe neuve, branchée seule : rien à valider
     ["desarme-modifiee", "a_valider"],
     ["desarme-retiree", "retiree"],
     ["desarme-desactivee", "retiree"],
@@ -603,10 +604,91 @@ test("cache : une pipe sortie de la liste est retraduite si elle revient, même 
   expect(appelsClaude).toBe(avant + 1);
 });
 
+test("branchement automatique en échec durable : un appel à Claude et une proposition, quel que soit le nombre de synchronisations ; « Valider » en échec, reproposée ; « Refuser » tient jusqu'à un nouveau texte", async () => {
+  const moteur = new Moteur(join(dossier, "regles-repli-durable.json"));
+  const pipe = "repli-durable";
+  const repli = () => [...moteur.actions.values()].filter((a) => a.nom === "pipe.brancher" && a.params.pipe === pipe);
+  const refusAuto = () => moteur.journal.filter((l) => l.message.startsWith(`pipe « ${pipe} » : branchement automatique refusé`));
+  const fichierValides = process.env.FICHIER_PIPES_DES_QUE;
+  // Fichier des validations impossible à écrire (son dossier est un fichier) : tout branchement échoue, jusqu'à réparation.
+  const pasUnDossier = join(dossier, "pas-un-dossier");
+  writeFileSync(pasUnDossier, "");
+  process.env.FICHIER_PIPES_DES_QUE = join(pasUnDossier, "valides.json");
+  traduction = traductionOk();
+  pipes = [pipeCasque(pipe)];
+  const avant = appelsClaude;
+  try {
+    for (let i = 0; i < 3; i++) await synchroniserAutomatiquement(moteur);
+    expect(appelsClaude).toBe(avant + 1);
+    expect(refusAuto()).toHaveLength(1);
+    expect(repli().map((a) => a.statut)).toEqual(["proposee"]);
+    expect(moteur.regles.find((r) => r.id === idReglePipe(pipe))).toBeUndefined();
+    expect((await etatPipes(moteur))[pipe]).toMatchObject({ statut: "a_valider", actionId: repli()[0]!.id });
+
+    // « Valider » en échec : comme avant, la synchronisation suivante la retraduit et la repropose, une fois.
+    await moteur.valider(repli()[0]!.id);
+    expect(repli()[0]).toMatchObject({ statut: "echec", erreur: expect.stringContaining("EEXIST") });
+    for (let i = 0; i < 2; i++) await synchroniserAutomatiquement(moteur);
+    expect(appelsClaude).toBe(avant + 2);
+    expect(repli().map((a) => a.statut)).toEqual(["echec", "proposee"]);
+
+    // « Refuser » tient : ni branchement automatique, ni nouvel appel, ni nouvelle proposition, tant que rien ne change.
+    moteur.refuser(repli()[1]!.id);
+    for (let i = 0; i < 2; i++) await synchroniserAutomatiquement(moteur);
+    expect(appelsClaude).toBe(avant + 2);
+    expect(refusAuto()).toHaveLength(2);
+    expect(repli().map((a) => a.statut)).toEqual(["echec", "refusee"]);
+    expect(moteur.regles.find((r) => r.id === idReglePipe(pipe))).toBeUndefined();
+    expect((await etatPipes(moteur))[pipe]).toMatchObject({ statut: "refusee", motif: "branchement refusé" });
+  } finally {
+    process.env.FICHIER_PIPES_DES_QUE = fichierValides;
+  }
+  // Nouveau texte, fichier des validations réparé : retraduite, puis branchée seule.
+  pipes[0]!.config.trigger.custom = "dès que le casque passe sous 85 €";
+  await synchroniserAutomatiquement(moteur);
+  expect(appelsClaude).toBe(avant + 3);
+  await constaterBranchee(moteur, pipe, "dès que le casque passe sous 85 €");
+});
+
+test("branchement : une sauvegarde des règles en échec après l'armement n'est pas un refus : règle armée et validée, alerte claire ; seule, aucune proposition ; au clic, action exécutée", async () => {
+  const moteur = new Moteur(join(dossier, "regles-sauvegarde-ratee.json"));
+  const pipe = "sauvegarde-ratee";
+  const sauver = moteur.sauverRegles.bind(moteur);
+  let echecs = 1;
+  moteur.sauverRegles = async () => {
+    if (echecs-- > 0) throw new Error("ENOSPC: no space left on device (simulé)");
+    return sauver();
+  };
+  traduction = traductionOk();
+  pipes = [pipeCasque(pipe)];
+  const rapports = await synchroniserAutomatiquement(moteur);
+  const lignes = moteur.journal.map((l) => [l.niveau, l.message]);
+  expect(lignes).toContainEqual(["alerte", `pipe « ${pipe} » : règle armée et validée, mais règles non sauvegardées : ENOSPC: no space left on device (simulé)`]);
+  expect(lignes.filter(([, m]) => m!.includes("branchement automatique refusé"))).toEqual([]);
+  await constaterBranchee(moteur, pipe, TEXTE); // armée, validée, « branchée », sans proposition
+  expect(rapports.map((r) => [r.pipe, r.statut])).toEqual([[pipe, "deja"]]);
+  envois.length = 0;
+  await moteur.emettre(prixCasque());
+  expect(envois.map((e) => e.chemin)).toEqual([`/pipes/${pipe}/run`]);
+
+  // Au clic sur Valider (pipe déjà validée, réécrite), de même : l'action est exécutée, puisque la règle est armée et validée.
+  const auClic = "sauvegarde-ratee-clic";
+  pipes = [pipeCasque(pipe), pipeCasque(auClic)];
+  await dejaValidee(auClic);
+  await synchroniserAutomatiquement(moteur);
+  const a = proposee(moteur, auClic)!;
+  echecs = 1;
+  await moteur.valider(a.id);
+  expect(moteur.actions.get(a.id)?.statut).toBe("executee");
+  expect(moteur.journal.map((l) => [l.niveau, l.message])).toContainEqual(["alerte", `pipe « ${auClic} » : règle armée et validée, mais règles non sauvegardées : ENOSPC: no space left on device (simulé)`]);
+  expect(moteur.regles.find((r) => r.id === idReglePipe(auClic))?.active).toBe(true);
+  expect((await etatPipes(moteur))[auClic]?.statut).toBe("branchee");
+});
+
 test("règle « pipe-des-que-X » posée sans validation : ni affichée branchée, ni lancée ; arrêtée, la pipe est reproposée", async () => {
   const moteur = new Moteur(join(dossier, "regles-forgee.json"));
-  // Validée sur le prix du casque d'un clic sur Valider (pipe déjà validée, puis réécrite). Branchée seule, l'état la dirait
-  // encore « branchée » malgré la règle forgée : écart de src, voir le test à faire qui suit.
+  // Validée sur le prix du casque d'un clic sur Valider (pipe déjà validée, puis réécrite). Le test qui suit vérifie le même
+  // affichage sur une pipe branchée seule.
   traduction = traductionOk();
   pipes = [pipeCasque("forgee")];
   await dejaValidee("forgee");
@@ -636,9 +718,7 @@ test("règle « pipe-des-que-X » posée sans validation : ni affichée branché
   expect(moteur.journal.map((l) => l.message)).toContain(`règle « ${idReglePipe("forgee")} » arrêtée : règle différente de celle validée, à revalider`);
 });
 
-// Écart de src : une pipe branchée seule garde « branchee » dans l'état que tient la synchronisation, et etatPipes le rend
-// tel quel, sans revérifier la règle armée. À faire tant qu'il demeure ; « bun test --todo » le lance.
-test.todo("règle « pipe-des-que-X » posée sans validation sur une pipe branchée seule : jamais affichée branchée", async () => {
+test("règle « pipe-des-que-X » posée sans validation sur une pipe branchée seule : jamais affichée branchée", async () => {
   const moteur = new Moteur(join(dossier, "regles-forgee-seule.json"));
   await brancher(moteur, "forgee-seule");
   const forgee: Regle = { id: idReglePipe("forgee-seule"), nom: "forgee-seule", active: true, desQue: { source: "mail", type: "mail_recu" }, alors: { mode: "fixe", action: "pipe.lancer", params: { pipe: "forgee-seule" } }, validation: "auto" };
@@ -1586,7 +1666,7 @@ test("source à créer : lue une fois avant de proposer ; proposition, preuve et
     const heure = LUE.toLocaleString("fr-FR");
     const resume =
       "dès que web/valeur_changee si nom egal Bitcoin et valeur superieur 50000 → lancer la pipe, en envoyant à son modèle le déclencheur et " +
-      `les nombres valeur, ancienne de l'événement ; source web « Bitcoin » créée au clic sur Valider : ${URL_BTC}, motif « "eur":\\s*([\\d.]+) », ` +
+      `les nombres valeur, ancienne de l'événement ; source web « Bitcoin » créée au branchement : ${URL_BTC}, motif « "eur":\\s*([\\d.]+) », ` +
       `relevée toutes les 60 s ; valeur lue 51234.5 le ${heure}`;
     expect(a.params.text).toBe(`Brancher la pipe « Alerte bitcoin » : ${resume}`);
     expect((await etatPipes(moteur))["btc-proposee"]).toMatchObject({ statut: "a_valider", regle: resume });
@@ -1634,7 +1714,7 @@ test("Valider : garde revérifiée (DNS compris), source ajoutée d'un seul gest
     // Règle armée et validée, source comprise.
     expect(moteur.regles.find((r) => r.id === idReglePipe("btc-validee"))).toMatchObject({ active: true, alors: { params: { source: sourceBtc } } });
     expect((await Bun.file(process.env.FICHIER_PIPES_DES_QUE!).json())["btc-validee"]).toMatchObject({ texte: BITCOIN, alors: { params: { source: sourceBtc } } });
-    expect((await etatPipes(moteur))["btc-validee"]).toMatchObject({ statut: "branchee", regle: expect.stringContaining(`; source web « Bitcoin » créée au clic sur Valider : ${URL_BTC}`) });
+    expect((await etatPipes(moteur))["btc-validee"]).toMatchObject({ statut: "branchee", regle: expect.stringContaining(`; source web « Bitcoin » créée au branchement : ${URL_BTC}`) });
     // La valeur passe 52 000 : la pipe part, avec des nombres seulement.
     envois.length = 0;
     await moteur.emettre(btcChange(52000, "51234.5"));
@@ -1690,7 +1770,9 @@ test("branchement automatique d'une pipe neuve qui fait créer une source : gard
     expect(lectures.map((l) => [l.url, l.init?.redirect])).toEqual([[URL_BTC, "manual"], [URL_BTC, "manual"]]);
     expect(moteur.regles.find((r) => r.id === idReglePipe("btc-neuve"))).toMatchObject({ active: true, alors: { params: { source: sourceBtc } } });
     expect((await Bun.file(process.env.FICHIER_PIPES_DES_QUE!).json())["btc-neuve"]).toMatchObject({ texte: BITCOIN, alors: { params: { source: sourceBtc } } });
-    expect((await etatPipes(moteur))["btc-neuve"]!.regle).toContain(`source web « Bitcoin »`);
+    // Branchée sans clic : son état ne parle pas de clic.
+    expect((await etatPipes(moteur))["btc-neuve"]!.regle).toContain(`; source web « Bitcoin » créée au branchement : ${URL_BTC}`);
+    expect((await etatPipes(moteur))["btc-neuve"]!.regle).not.toContain("clic");
     // La valeur passe 52 000 : la pipe part, avec des nombres seulement.
     envois.length = 0;
     await moteur.emettre(btcChange(52000, "51234.5"));
