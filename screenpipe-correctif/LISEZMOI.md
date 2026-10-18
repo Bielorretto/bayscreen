@@ -27,13 +27,11 @@ branche. Vérifié le 18/10 sur les cas journaliste et administratif (`dev2/briq
    ```
 
    Puis ouvrir une **nouvelle** conversation dans le chat. Une mise à jour de screenpipe peut effacer la skill : la recopier.
-2. **Figer `pi-subagents`** : screenpipe remet cette extension dans ses réglages au lancement de chaque pipe, et à partir
-   de 0.71 elle fait échouer toutes les pipes (`toToolDeclaration is not a function`). La version 0.70.0 est celle que
-   screenpipe fige lui-même depuis (commit amont 91f1a17).
-
-   ```sh
-   cd ~/.screenpipe/pi-config/npm && bun add --exact pi-subagents@0.70.0
-   ```
+2. **`pi-subagents` : automatique.** screenpipe remet cette extension dans ses réglages au lancement de chaque pipe, et à
+   partir de 0.71 elle fait échouer toutes les pipes (`toToolDeclaration is not a function`). Le moteur la ramène tout
+   seul à 0.70.0, la version que screenpipe fige lui-même depuis (commit amont 91f1a17), au démarrage et avant chaque
+   lancement (`src/fixes/pi-subagents.ts`, journal : « pi-subagents ramené de … à 0.70.0 »). S'il n'y arrive pas, il donne
+   la commande à taper : `cd ~/.screenpipe/pi-config/npm && bun add --exact pi-subagents@0.70.0`.
 3. Lancer le moteur (section 4), puis écrire dans le chat, par exemple : « Dès que j'ai fini ma rédaction dans Pages
    (au moins 1 minute), vérifie automatiquement toutes mes sources et envoie-moi un rapport. » La pipe est branchée dans
    la minute (journal du moteur : « branchée automatiquement »).
