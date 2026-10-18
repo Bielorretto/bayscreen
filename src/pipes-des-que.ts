@@ -865,7 +865,7 @@ executeurs["pipe.lancer"] = async (params, bus) => {
   }
   if (b.sens) {
     const j = await briques.jugerSens(b.sens, refs);
-    if (!j.motif.startsWith("appli hors liste")) bus.journaliser("info", `pipe « ${pipe} » : « ${b.sens.question} » → ${j.motif}`);
+    if (!j.motif.includes("sans appel à Claude")) bus.journaliser("info", `pipe « ${pipe} » : « ${b.sens.question} » → ${j.motif}`);
     if (!j.oui) return { lancee: false, motif: j.motif };
     if (!bus.regles.includes(regle)) throw new Error("règle arrêtée ou modifiée pendant la question de sens : non lancée");
   }

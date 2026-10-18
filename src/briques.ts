@@ -121,9 +121,14 @@ async function texteEcran(app: string): Promise<string> {
  * La question de sens, oui ou non. Filtre gratuit d'abord (appli), puis Haiku, en cache par question et champs lus.
  * Claude indisponible ou trop lent : non (rien ne part sur un doute).
  */
+/** Titres de fenêtre qui ne sont pas un document : boîtes de dialogue, appli sans fenêtre. Leur écran montre souvent une liste de fichiers, qui tromperait Haiku. */
+const PAS_UN_DOCUMENT = /^(ouvrir|open|enregistrer( sous)?|save( as)?|imprimer|print|exporter|export|préférences|réglages|settings|\(sans fenêtre\))?$/i;
+export const pasUnDocument = (fenetre: string | undefined) => PAS_UN_DOCUMENT.test(ligneSure(fenetre).trim());
+
 export async function jugerSens(s: Sens, refs: Record<string, string>): Promise<{ oui: boolean; motif: string }> {
   const app = (refs.app ?? "").toLowerCase();
   if (s.apps.length && !s.apps.some((a) => app.includes(a.toLowerCase()))) return { oui: false, motif: "appli hors liste (sans appel à Claude)" };
+  if (s.depuis.includes("fenetre") && pasUnDocument(refs.fenetre)) return { oui: false, motif: "boîte de dialogue ou appli sans document (sans appel à Claude)" };
   const champs = s.depuis.map((c) => [c, ligneSure(refs[c], 500)] as const);
   if (!champs.some(([, v]) => v)) return { oui: false, motif: "rien à lire" };
   const cle = JSON.stringify([s.question, champs]);

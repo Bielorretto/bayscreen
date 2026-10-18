@@ -46,6 +46,13 @@ test("sens : filtre d'appli gratuit, puis Haiku une seule fois par document (cac
   expect(questions.length).toBe(1);
 });
 
+test("sens : une boîte de dialogue (Ouvrir, Enregistrer) ou une appli sans document n'appelle pas Haiku", async () => {
+  const s = { question: "Est-ce un document administratif ?", depuis: ["fenetre"], apps: ["Aperçu"], ecran: true };
+  for (const fenetre of ["Ouvrir", "Enregistrer sous", "(sans fenêtre)", ""]) expect((await b.jugerSens(s, { app: "Aperçu", fenetre })).oui).toBe(false);
+  expect(questions.length).toBe(0);
+  expect((await b.jugerSens(s, { app: "Aperçu", fenetre: "demande_APL_cerfa.pdf – 1 page" })).oui).toBe(true);
+});
+
 test("sens : Claude en échec ou réponse illisible → non, rien ne part sur un doute", async () => {
   const s = { question: "Une promesse de rappel ?", depuis: ["objet"], apps: [], ecran: false };
   reponse = new Error("délai dépassé");
