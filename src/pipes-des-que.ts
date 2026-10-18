@@ -2,16 +2,18 @@
 // screenpipe accepte dans pipe.md un déclencheur `custom` en langage naturel, mais ne l'évalue jamais
 // (screenpipe-core, pipes/mod.rs : « future: matched via embedding similarity »). Ce pont lit les pipes,
 // fait traduire chaque déclencheur par Claude en règle déterministe, vérifie les accès dont elle a besoin,
-// rejoue des essais sans Claude, puis PROPOSE le branchement : rien ne tourne avant le clic « Valider ».
-// Un déclencheur modifié dans screenpipe est retraduit, comme la consigne modifiée d'une pipe pas encore branchée ; une
-// pipe retirée arrête sa règle. Au lancement, la pipe est revérifiée, puis reçoit en contexte (run_context) son
-// déclencheur et des nombres de l'événement, jamais son texte ;
+// rejoue des essais sans Claude, puis branche : une pipe jamais validée se branche seule (sa phrase vaut validation),
+// avec les vérifications mêmes du clic ; une pipe déjà validée dont le déclencheur change, ou un branchement automatique
+// refusé, attend le clic « Valider ». Un déclencheur modifié dans screenpipe est retraduit, comme la consigne modifiée
+// d'une pipe pas encore branchée ; une pipe retirée arrête sa règle. Au lancement, la pipe est revérifiée, puis reçoit
+// en contexte (run_context) son déclencheur et des nombres de l'événement, jamais son texte ;
 // et, si sa règle en déclare (extraction bornée), des valeurs fermées que Claude a lues dans ce texte, dans le moteur et
 // sans outil : un choix parmi une liste fixe, un nombre ou un booléen, revérifiés par le moteur. Elle reçoit aussi une
 // consigne : un accès qui bloque, son agent le dit à l'utilisateur ; et son exécution est suivie (actions.ts, suivreExecution).
 // Un déclencheur sur une valeur publique qu'aucune source ne surveille (« dès que le bitcoin dépasse 50 000 € ») fait aussi
-// proposer la source web qui la relève : bornée, gardée (adresse et DNS), lue une fois avant la proposition, et ajoutée au
-// fichier des sources, marquée « pont », seulement au clic sur Valider ; elle fait partie de la règle validée.
+// créer la source web qui la relève : bornée, gardée (adresse et DNS), lue une fois à la traduction, et ajoutée au fichier
+// des sources, marquée « pont », au branchement seulement (automatique ou au clic sur Valider) ; elle fait partie de la
+// règle validée.
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -145,7 +147,7 @@ type ConfigPipe = { name?: string; title?: string; description?: string; enabled
 /** Une pipe telle que GET /pipes la liste : sa config (front-matter de pipe.md) et sa consigne, le corps de pipe.md. */
 type PipeListee = { config?: ConfigPipe; prompt_body?: unknown };
 type Source = { type: string; nom?: string; url?: string; motif?: string; mailbox?: string };
-/** Une source web que le pont fait créer au clic sur Valider : dans la règle (params.source), puis dans le fichier des sources. */
+/** Une source web que le pont fait créer au branchement : dans la règle (params.source), puis dans le fichier des sources. */
 export type SourceProposee = { nom: string; url: string; motif: string; intervalleSecondes: number };
 /** La valeur lue une fois à la source proposée, avant la proposition, et son heure (ISO 8601). */
 export type Lecture = { valeur: number; le: string };
@@ -155,6 +157,11 @@ export type RapportPipe = {
   pipe: string;
   titre: string;
   declencheur: string;
+  /**
+   * a_valider : traduite, accès et essais OK, proposée à « Valider » ; deja : rien à faire (branchée et inchangée, dont une
+   * pipe neuve branchée seule à l'instant, ou déjà traitée pendant cette session) ; refusee, erreur : non branchée (motif) ;
+   * retiree : règle arrêtée faute de pipe.
+   */
   statut: "a_valider" | "deja" | "refusee" | "erreur" | "retiree";
   regle?: Regle;
   acces?: Acces[];
@@ -544,7 +551,7 @@ const resumeRegle = (r: Regle, lue?: Lecture) => {
   const jamais = extractionDe(r).length ? ` ; jamais le texte ${deQuoi(r)}` : "";
   const s = sourceDe(r);
   const source = s
-    ? ` ; source web « ${s.nom} » créée au clic sur Valider : ${s.url}, motif « ${s.motif} », relevée toutes les ${s.intervalleSecondes} s` +
+    ? ` ; source web « ${s.nom} » créée au branchement : ${s.url}, motif « ${s.motif} », relevée toutes les ${s.intervalleSecondes} s` +
       (lue ? ` ; valeur lue ${lue.valeur} le ${heure(lue.le)}` : "")
     : "";
   return `dès que ${r.desQue.source}/${r.desQue.type}${si ? ` si ${si}` : ""} → lancer la pipe, en envoyant à son modèle ${transmis(r)}${jamais}${source}`;
@@ -555,13 +562,16 @@ const consigneDe = (p: PipeListee | undefined) => (typeof p?.prompt_body === "st
 /** Empreinte d'une consigne : modifiée, elle retraduit une pipe pas encore branchée et périme sa proposition. */
 export const empreinteConsigne = (consigne: string) => createHash("sha256").update(consigne).digest("hex").slice(0, 16);
 
-/** Ce qu'un humain a validé pour une pipe : le texte de son déclencheur et la règle qui en est née, à l'identique. */
+/**
+ * Ce qui a été validé pour une pipe, d'un clic sur Valider ou par sa phrase (pipe neuve branchée seule) : le texte de son
+ * déclencheur et la règle qui en est née, à l'identique.
+ */
 type Validation = { texte: string; desQue: Regle["desQue"]; alors: Regle["alors"] };
 /** La règle est-elle exactement celle que l'humain a validée (même desQue, même alors) ? Posée ou modifiée sans lui : non. */
 const estValidee = (r: Regle, v: Partial<Validation> | undefined) =>
   !!v?.desQue && JSON.stringify([r.desQue, r.alors]) === JSON.stringify([v.desQue, v.alors]);
 
-// Validations humaines (pipe → Validation), gardées sur disque pour survivre aux redémarrages. Lues et écrites sans
+// Validations (pipe → Validation), gardées sur disque pour survivre aux redémarrages. Lues et écrites sans
 // await : brancher enregistre la validation et arme la règle d'un seul geste, qu'aucune synchronisation ni aucun
 // lancement ne peut couper (sinon ils verraient la règle armée sans sa validation, et la désarmeraient).
 const fichierValides = () => process.env.FICHIER_PIPES_DES_QUE ?? "data/pipes-des-que.json";
@@ -575,8 +585,8 @@ function ecrireValidation(pipe: string, v: Validation) {
   mkdirSync(dirname(fichierValides()), { recursive: true });
   writeFileSync(fichierValides(), JSON.stringify(valides, null, 2) + "\n");
 }
-// Déclencheur et empreinte de consigne déjà traités pendant cette session (proposés ou refusés) : pas de nouvel appel à
-// Claude tant qu'aucun des deux ne change.
+// Déclencheur et empreinte de consigne déjà traités pendant cette session (proposés, branchés seuls, refusés, ou dont le
+// branchement automatique a échoué) : pas de nouvel appel à Claude tant qu'aucun des deux ne change.
 const traites = new Map<string, string>();
 
 export type EtatPipe = Pick<RapportPipe, "declencheur" | "acces" | "essais" | "motif"> & {
@@ -587,7 +597,10 @@ export type EtatPipe = Pick<RapportPipe, "declencheur" | "acces" | "essais" | "m
 // Dernier rapport de chaque pipe, et l'action proposée pour elle : affichés sous le déclencheur dans screenpipe.
 const etats = new Map<string, EtatPipe>();
 
-/** État de chaque pipe « dès que » (GET /api/pipes/etat). La décision prise depuis et la règle validée active l'emportent sur le rapport. */
+/**
+ * État de chaque pipe « dès que » (GET /api/pipes/etat). La décision prise depuis et la règle validée active l'emportent sur le
+ * rapport. « branchée » ne vient que de là : une règle armée égale à celle validée, branchée d'un clic ou seule.
+ */
 export async function etatPipes(moteur: Moteur): Promise<Record<string, EtatPipe>> {
   const res: Record<string, EtatPipe> = {};
   for (const [nom, e] of etats) {
@@ -606,7 +619,10 @@ export async function etatPipes(moteur: Moteur): Promise<Record<string, EtatPipe
   return res;
 }
 
-/** Validation humaine : l'action « pipe.brancher », validée dans la page, active la règle traduite. */
+/**
+ * Branchement : l'action « pipe.brancher », validée dans la page ou sous le déclencheur, active la règle traduite ; la
+ * synchronisation l'appelle aussi, sans clic, pour une pipe jamais validée. Un « Valider » en échec est reproposé.
+ */
 executeurs["pipe.brancher"] = (params, bus) =>
   brancher(params, bus).catch((e) => {
     traites.delete(String(params.pipe ?? "")); // la synchronisation suivante repropose ce déclencheur
@@ -626,14 +642,14 @@ async function brancher(params: Record<string, unknown>, bus: Bus) {
   if (!regle || !alors || !ex?.ok || !src?.ok || regle.id !== idReglePipe(pipe) || alors.action !== "pipe.lancer" || JSON.stringify(alors.params) !== JSON.stringify(paramsPipe(pipe, regle.desQue, ex.spec, src.source))) {
     throw new Error("règle de pipe invalide");
   }
-  // Vérifié au moment de brancher : le déclencheur ou la consigne ont pu changer, ou la pipe disparaître, depuis la proposition.
+  // Vérifié au moment de brancher : le déclencheur ou la consigne ont pu changer, ou la pipe disparaître, depuis la traduction.
   const p = (await lirePipes()).find((x) => x.config?.name === pipe);
   const cfg = p?.config;
   const texte = texteDeclencheur(cfg?.trigger?.custom);
   if (!cfg || cfg.enabled === false || texte !== params.declencheur || empreinteConsigne(consigneDe(p)) !== params.empreinteConsigne) {
     throw new Error("déclencheur ou consigne modifiés, ou pipe retirée, depuis la proposition : rien n'est branché");
   }
-  // Garde revérifiée au clic, DNS compris : le nom a pu changer d'adresse depuis la lecture.
+  // Garde revérifiée au branchement, DNS compris : le nom a pu changer d'adresse depuis la lecture.
   const source = src.source;
   const refus = source ? await adresseRefuseeDns(source.url) : "";
   if (refus) throw new Error(`source « ${source!.nom} » : adresse refusée (${refus}) : rien n'est branché`);
@@ -641,13 +657,19 @@ async function brancher(params: Record<string, unknown>, bus: Bus) {
   if (source) creerSource(source, bus);
   ecrireValidation(pipe, { texte, desQue: regle.desQue, alors: regle.alors });
   bus.regles = [...bus.regles.filter((r) => r.id !== regle.id), { ...regle, active: true }];
-  await bus.sauverRegles();
+  try {
+    await bus.sauverRegles();
+  } catch (e: any) {
+    // Armée et validée, elle part au prochain événement : ce n'est pas un refus. Seul le fichier des règles est en retard,
+    // jusqu'à la prochaine sauvegarde réussie.
+    bus.journaliser("alerte", `pipe « ${pipe} » : règle armée et validée, mais règles non sauvegardées : ${e.message}`);
+  }
   bus.diffuser(bus.etat());
   return { branchee: regle.id };
 }
 
 /**
- * Au clic sur Valider : ajoute la source au fichier des sources d'un seul geste (tableau lu, fichier temporaire écrit à côté,
+ * Au branchement : ajoute la source au fichier des sources d'un seul geste (tableau lu, fichier temporaire écrit à côté,
  * puis renommé), marquée « origine: pont », et la fait relever tout de suite, en mode strict ; main.ts la relira au
  * démarrage. Même nom, même adresse et même motif : déjà là, ni doublon ni second relevé. Même nom, autre adresse ou autre
  * motif : erreur, rien n'est écrit. Synchrone : rien ne s'intercale entre la lecture du fichier et son remplacement.
@@ -792,7 +814,9 @@ executeurs["pipe.lancer"] = async (params, bus) => {
  * la règle de toute pipe retirée, désactivée, sans déclencheur, au déclencheur modifié, ou dont la règle n'est pas celle
  * validée. Puis, pour chaque pipe à déclencheur custom : déjà validée, déclencheur inchangé → rien, même si sa consigne a
  * changé depuis ; nouvelle, déclencheur modifié, ou consigne modifiée avant la validation → traduction, accès, essais,
- * puis action à valider.
+ * puis : jamais validée, branchée seule par pipe.brancher (les vérifications du clic) ; déjà validée, ou branchement
+ * automatique refusé → action à valider. Un branchement automatique refusé n'est pas retenté : sa proposition attend le
+ * geste de l'humain, un nouveau texte ou une nouvelle consigne.
  */
 async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
   const pipes = await lirePipes();
@@ -870,9 +894,9 @@ async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
       ...(source && r.lecture ? [lectureSource(source, r.lecture)] : []),
       `Envoyé au modèle de la pipe à chaque lancement : ${transmis(r.regle!)}. Jamais le texte d'un mail, d'une page ou d'une transcription.`,
     ].join("\n");
-    // Règle produit (décision de Diouf, 17/10) : une pipe qu'il vient de créer dans screenpipe
-    // se branche seule — sa phrase dans le chat vaut validation. Seul un déclencheur modifié
-    // après coup redemande un geste (la proposition ci-dessous, à valider depuis screenpipe).
+    // Règle produit (décision de Diouf, 17/10) : une pipe jamais validée se branche seule — sa phrase dans le chat
+    // vaut validation. Une pipe qui a déjà une validation (déclencheur modifié après coup…), ou dont le branchement
+    // automatique échoue, attend un geste : la proposition ci-dessous, à valider depuis screenpipe.
     if (v === undefined) {
       try {
         await executeurs["pipe.brancher"]!(
@@ -885,10 +909,15 @@ async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
           },
           moteur,
         );
-        etats.set(nom, { declencheur: texte, statut: "branchee", regle: resumeRegle(r.regle!, r.lecture) });
+        // Rien à valider : le rapport dit « déjà traitée », comme les synchronisations suivantes. L'état reste celui de la
+        // traduction : etatPipes ne dit « branchée » que tant que la règle armée est celle validée, comme après un clic.
+        rapports[rapports.indexOf(r)] = { pipe: nom, titre, declencheur: texte, statut: "deja" };
         moteur.journaliser("info", `pipe « ${nom} » branchée automatiquement : créée dans screenpipe, la phrase vaut validation`);
         continue;
       } catch (e: any) {
+        // L'exécuteur a oublié ce déclencheur (traites), pour qu'un « Valider » en échec soit reproposé. Ici, la proposition
+        // de repli suffit : ni nouvel appel à Claude ni nouvelle proposition à chaque passage, et un « Refuser » tient.
+        traites.set(nom, traite);
         moteur.journaliser("alerte", `pipe « ${nom} » : branchement automatique refusé (${e.message}) : passage en validation`);
       }
     }

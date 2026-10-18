@@ -51,6 +51,82 @@ describe("mémoire", () => {
     expect(s.map((x) => x.extrait)).toEqual([expect.stringContaining("89 €")]);
   });
 
+  test("une requête d'écran par mot : content_type « ocr » seul, qui porte aussi le texte d'accessibilité", async () => {
+    const demandes: Record<string, unknown>[] = [];
+    const s = await souvenirs("Devis n° 42 à valider", {}, async (p) => {
+      demandes.push(p);
+      return chercher(p);
+    });
+    expect(demandes.map((p) => [p.q, p.content_type, p.limit])).toEqual([["devis", "ocr", 10], ["42", "ocr", 10], ["valider", "ocr", 10]]);
+    expect(demandes.every((p) => typeof p.start_time === "string")).toBe(true);
+    expect(s).toHaveLength(1);
+  });
+
+  test("une requête /search en erreur ne fait pas perdre les souvenirs des autres mots", async () => {
+    // screenpipe occupé pour le premier mot (503 « search is busy ») : les mots suivants sont cherchés, et leurs écrans restent.
+    const demandes: unknown[] = [];
+    const s = await souvenirs("Devis n° 42 casques", {}, async (p) => {
+      demandes.push(p.q);
+      if (p.q === "devis") throw new Error('screenpipe GET /search?q=devis&content_type=ocr → 503 {"error":"search is busy"}');
+      return chercher(p);
+    });
+    expect(demandes).toEqual(["devis", "42", "casques"]);
+    expect(s).toHaveLength(1);
+    expect(s[0]!.extrait).toContain("1 290 €");
+  });
+
+  test("screenpipe injoignable (toutes les requêtes en erreur) : la première erreur remonte, pour que l'appelant alerte « mémoire indisponible »", async () => {
+    const s = souvenirs("Devis n° 42 à valider", {}, async (p) => {
+      throw new Error(`screenpipe GET /search?q=${p.q} → 403 clé refusée (simulé)`);
+    });
+    await expect(s).rejects.toThrow("q=devis → 403");
+  });
+
+  test("deux mots-clés, un en erreur : le seuil de deux mots n'est plus atteignable, l'erreur remonte au lieu d'une mémoire vide", async () => {
+    const s = souvenirs("Devis n° 42", {}, async (p) => {
+      if (p.q === "42") throw new Error('screenpipe GET /search?q=42&content_type=ocr → 503 {"error":"search is busy"}');
+      return chercher(p);
+    });
+    await expect(s).rejects.toThrow("503");
+  });
+
+  test("délai dépassé : screenpipe ne répond plus, les mots suivants ne sont pas cherchés et l'erreur remonte", async () => {
+    const demandes: unknown[] = [];
+    const s = souvenirs("Devis n° 42 casques", {}, async (p) => {
+      demandes.push(p.q);
+      if (p.q === "devis") throw new DOMException("The operation timed out.", "TimeoutError");
+      return chercher(p);
+    });
+    await expect(s).rejects.toThrow("timed out");
+    expect(demandes).toEqual(["devis"]);
+  });
+
+  test("une erreur puis un délai dépassé : la recherche s'arrête au délai, et c'est la première erreur qui remonte", async () => {
+    const demandes: unknown[] = [];
+    const s = souvenirs("Devis n° 42 casques", {}, async (p) => {
+      demandes.push(p.q);
+      if (p.q === "devis") throw new Error('screenpipe GET /search?q=devis&content_type=ocr → 503 {"error":"search is busy"}');
+      if (p.q === "42") throw new DOMException("The operation timed out.", "TimeoutError");
+      return chercher(p);
+    });
+    await expect(s).rejects.toThrow("503");
+    expect(demandes).toEqual(["devis", "42"]);
+  });
+
+  test("un seul mot-clé : un écran qui le contient suffit ; en erreur, l'erreur remonte", async () => {
+    expect((await souvenirs("Devis", {}, chercher)).map((x) => x.extrait)).toEqual([expect.stringContaining("1 290 €")]);
+    const enErreur = souvenirs("Devis", {}, async () => {
+      throw new Error("screenpipe GET /search?q=devis → 403 clé refusée (simulé)");
+    });
+    await expect(enErreur).rejects.toThrow("403");
+  });
+
+  test("texte sans mot-clé : aucune requête, aucun souvenir", async () => {
+    let requetes = 0;
+    expect(await souvenirs("Re: OK", {}, async () => (requetes++, { data: [] }))).toEqual([]);
+    expect(requetes).toBe(0);
+  });
+
   test("un souvenir par fenêtre : un éditeur ouvert ne chasse pas la page du devis", async () => {
     const editeur = (id: number) => ({ ...ecran(id, "devis 42 valider : notes de travail"), content: { ...ecran(id, "devis 42 valider : notes de travail").content, app_name: "Éditeur" } });
     const data = [editeur(20), editeur(21), editeur(22), ecran(1, "Devis n° 42 — Total : 1 290 €")];
