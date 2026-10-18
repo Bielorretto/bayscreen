@@ -231,13 +231,32 @@ export const attentesEnCours = (pipe: string) => attentes.get(pipe)?.size ?? 0;
 // ── anti-répétition ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 const lances = new Map<string, number>();
-/** Vrai si la pipe est déjà partie pour ce même contexte il y a moins de N min (un document rouvert ne la relance pas). */
-export function dejaLance(pipe: string, contexte: Record<string, string>, minutes = 30): boolean {
-  const cle = `${pipe}\u0000${JSON.stringify(contexte)}`;
+const derniers = new Map<string, number>();
+
+/** Le document, quelle que soit l'appli : « formulaire_CAF.pdf – 1 page » (Aperçu) = « formulaire_CAF.pdf » (Acrobat) = « formulaire_CAF ». */
+export function cleDocument(fenetre: string): string {
+  return ligneSure(fenetre)
+    .toLowerCase()
+    .replace(/\s*[–—-]\s*\d+\s*pages?$/, "")
+    .replace(/\s*[–—-]\s*(modifié|edited)$/, "")
+    .replace(/\.(pdf|docx?|pages|odt|rtf|txt)$/, "")
+    .trim();
+}
+
+/**
+ * Vrai si la pipe ne doit pas repartir : lancée il y a moins de N s (elle tourne encore, ou vient de rouvrir son document
+ * dans une autre appli), ou déjà lancée pour ce même document, dans n'importe quelle appli, il y a moins de M min.
+ */
+export function dejaLance(pipe: string, contexte: Record<string, string>, minutes = 30, occupeeSecondes = 120): boolean {
   const t = deps.maintenant();
+  const dernier = derniers.get(pipe);
+  if (dernier !== undefined && t - dernier < occupeeSecondes * 1000) return true;
+  const { app: _app, ...reste } = contexte;
+  const cle = `${pipe}\u0000${JSON.stringify({ ...reste, ...(reste.fenetre !== undefined ? { fenetre: cleDocument(reste.fenetre) } : {}) })}`;
   const avant = lances.get(cle);
   if (avant !== undefined && t - avant < minutes * 60_000) return true;
   lances.set(cle, t);
+  derniers.set(pipe, t);
   return false;
 }
 
@@ -248,4 +267,5 @@ export function oublierTout() {
   attentes.clear();
   cacheSens.clear();
   lances.clear();
+  derniers.clear();
 }

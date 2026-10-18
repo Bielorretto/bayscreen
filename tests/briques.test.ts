@@ -77,12 +77,15 @@ test("attente : part après le délai ; un nouveau mail du même expéditeur l'a
   expect(b.attentesEnCours("etudiant")).toBe(0);
 });
 
-test("anti-répétition : même document rouvert dans les 30 min → pas de second lancement", () => {
-  expect(b.dejaLance("admin", { fenetre: "formulaire_CAF.pdf" })).toBe(false);
+test("anti-répétition : même document, dans n'importe quelle appli, pas relancé dans les 30 min ; pipe occupée 2 min", () => {
+  expect(b.dejaLance("admin", { app: "Aperçu", fenetre: "formulaire_CAF.pdf – 1 page" })).toBe(false);
+  horloge += 20_000;
+  expect(b.dejaLance("admin", { app: "Aperçu", fenetre: "scan_003.pdf" })).toBe(true); // la pipe tourne encore
   horloge += 10 * 60_000;
-  expect(b.dejaLance("admin", { fenetre: "formulaire_CAF.pdf" })).toBe(true);
+  expect(b.dejaLance("admin", { app: "Acrobat", fenetre: "formulaire_CAF.pdf" })).toBe(true); // rouvert ailleurs par la pipe
+  expect(b.dejaLance("admin", { app: "Aperçu", fenetre: "scan_003.pdf" })).toBe(false); // autre document, pipe libre
   horloge += 31 * 60_000;
-  expect(b.dejaLance("admin", { fenetre: "formulaire_CAF.pdf" })).toBe(false);
+  expect(b.dejaLance("admin", { app: "Acrobat", fenetre: "formulaire_CAF.pdf" })).toBe(false);
 });
 
 test("ligneSure : une ligne, sans contrôle ni {{…}}, bornée", () => {

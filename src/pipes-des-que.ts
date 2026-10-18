@@ -886,7 +886,7 @@ executeurs["pipe.lancer"] = async (params, bus) => {
     return { lancee: false, attente: a.minutes };
   }
   if (b.sens && Object.keys(contexte).length && briques.dejaLance(pipe, contexte)) {
-    bus.journaliser("info", `pipe « ${pipe} » : déjà lancée pour ce document il y a moins de 30 min, pas de second lancement (redémarrer le moteur pour réessayer)`);
+    bus.journaliser("info", `pipe « ${pipe} » : déjà lancée il y a moins de 2 min, ou pour ce document il y a moins de 30 min : pas de second lancement (redémarrer le moteur pour réessayer)`);
     return { lancee: false, motif: "déjà lancée pour ce contexte il y a moins de 30 min" };
   }
   return partir(pipe, regle, texte, params.evenement, lire, contexte, bus);
