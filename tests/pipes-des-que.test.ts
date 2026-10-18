@@ -5,17 +5,20 @@ import { basename, join } from "node:path";
 import type { Extraction } from "../src/pipes-des-que";
 import type { Bus, Condition, Evenement, Regle } from "../src/types";
 
+// Pendant ce fichier, les validations et HOME visent des dossiers temporaires, remis et supprimés à la fin. L'exécuteur
+// d'origine de pipe.lancer retire pi-subagents de $HOME/.screenpipe/pi-config/settings.json (src/fixes/pi-subagents.ts) :
+// jamais la configuration de la machine.
+const envAvant = { FICHIER_PIPES_DES_QUE: process.env.FICHIER_PIPES_DES_QUE, HOME: process.env.HOME };
 const dossier = mkdtempSync(join(tmpdir(), "des-que-pipes-"));
-process.env.FICHIER_PIPES_DES_QUE = join(dossier, "valides.json");
-// L'exécuteur d'origine de pipe.lancer retire pi-subagents de $HOME/.screenpipe/pi-config/settings.json
-// (src/fixes/pi-subagents.ts) : pendant ce fichier, HOME vise un dossier temporaire, jamais la configuration de la machine.
-const homeAvant = process.env.HOME;
 const homeTests = mkdtempSync(join(tmpdir(), "des-que-home-"));
+process.env.FICHIER_PIPES_DES_QUE = join(dossier, "valides.json");
 process.env.HOME = homeTests;
 afterAll(() => {
-  if (homeAvant === undefined) delete process.env.HOME;
-  else process.env.HOME = homeAvant;
-  rmSync(homeTests, { recursive: true, force: true });
+  for (const [cle, valeur] of Object.entries(envAvant)) {
+    if (valeur === undefined) delete process.env[cle];
+    else process.env[cle] = valeur;
+  }
+  for (const d of [dossier, homeTests]) rmSync(d, { recursive: true, force: true });
 });
 
 // Claude et screenpipe simulés : aucun appel réseau.
