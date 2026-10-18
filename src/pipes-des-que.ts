@@ -17,6 +17,8 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { executeurs, lancerPipe } from "./actions";
+import * as briques from "./briques";
+import { SANS_BRIQUES, briquesActives, champsBriques, ligneSure, resumeBriques, verifierBriques, type Briques } from "./briques";
 import { demanderJSON } from "./claude";
 import { config } from "./config";
 import { Moteur, regleCorrespond } from "./moteur";
@@ -31,16 +33,18 @@ import type { Bus, Condition, Evenement, Regle } from "./types";
  * texte : les champs texte où une règle peut faire lire par Claude, dans le moteur et sans outil, les valeurs fermées
  * qu'elle transmet à la pipe (« extraire », voir verifierExtraction). Données libres : aucun.
  */
-export const EVENEMENTS: Record<string, { champs: string[] | null; sens: string; contexte: string[]; texte: string[] }> = {
-  "web/valeur_changee": { champs: ["nom", "url", "valeur", "valeurTexte", "ancienne"], sens: "une valeur relevée sur une page ou une API surveillée change ; nom = nom de la source, valeur = nouvelle valeur (nombre), ancienne = valeur précédente", contexte: ["valeur", "ancienne"], texte: ["valeurTexte"] },
-  "mail/mail_recu": { champs: ["expediteur", "objet", "corps"], sens: "un mail arrive dans un dossier IMAP surveillé", contexte: [], texte: ["expediteur", "objet", "corps"] },
-  "screenpipe/meeting_started": { champs: ["meeting_id", "app", "title", "detection_source"], sens: "une visio commence", contexte: ["meeting_id"], texte: ["title"] },
+// references : les champs texte que la pipe peut recevoir, nettoyés (briques.ts, transmettre) : de quoi savoir de quel mail,
+// de quel document ou de quelle visio il s'agit ; jamais le corps d'un mail.
+export const EVENEMENTS: Record<string, { champs: string[] | null; sens: string; contexte: string[]; texte: string[]; references: string[] }> = {
+  "web/valeur_changee": { champs: ["nom", "url", "valeur", "valeurTexte", "ancienne"], sens: "une valeur relevée sur une page ou une API surveillée change ; nom = nom de la source, valeur = nouvelle valeur (nombre), ancienne = valeur précédente", contexte: ["valeur", "ancienne"], texte: ["valeurTexte"], references: ["nom", "url"] },
+  "mail/mail_recu": { champs: ["expediteur", "objet", "corps"], sens: "un mail arrive dans un dossier IMAP surveillé", contexte: [], texte: ["expediteur", "objet", "corps"], references: ["expediteur", "objet"] },
+  "screenpipe/meeting_started": { champs: ["meeting_id", "app", "title", "detection_source"], sens: "une visio commence", contexte: ["meeting_id"], texte: ["title"], references: ["app", "title"] },
   // Vérifié en réel : meeting_ended n'a ni app ni title (docs/SCREENPIPE.md).
-  "screenpipe/meeting_ended": { champs: ["meeting_id", "duration_secs", "meeting_end", "transcript_segments"], sens: "une visio se termine (sans app ni titre)", contexte: ["meeting_id", "duration_secs", "transcript_segments"], texte: [] },
-  "screenpipe/app_active": { champs: ["app", "fenetre", "capture"], sens: "l'application ou le document actif change ; app = nom de l'application active (ex. Microsoft Word), fenetre = titre de sa fenêtre, souvent le nom du document ouvert", contexte: [], texte: ["app", "fenetre"] },
+  "screenpipe/meeting_ended": { champs: ["meeting_id", "duration_secs", "meeting_end", "transcript_segments"], sens: "une visio se termine (sans app ni titre)", contexte: ["meeting_id", "duration_secs", "transcript_segments"], texte: [], references: [] },
+  "screenpipe/app_active": { champs: ["app", "fenetre", "capture"], sens: "l'application ou le document actif change ; app = nom de l'application active (ex. Microsoft Word), fenetre = titre de sa fenêtre, souvent le nom du document ouvert", contexte: [], texte: ["app", "fenetre"], references: ["app", "fenetre"] },
   // transcription y est une liste de lignes (copilote.ts), pas un texte : rien à en extraire tant qu'elle n'est pas mise à plat.
-  "appel/visio_terminee": { champs: ["meetingId", "app", "nbLignes", "transcription"], sens: "fin de visio vue par le copilote, avec l'appli et la transcription", contexte: ["meetingId", "nbLignes"], texte: [] },
-  "webhook/*": { champs: null, sens: "toute donnée envoyée à POST /api/evenements avec la source webhook", contexte: [], texte: [] },
+  "appel/visio_terminee": { champs: ["meetingId", "app", "nbLignes", "transcription"], sens: "fin de visio vue par le copilote, avec l'appli et la transcription", contexte: ["meetingId", "nbLignes"], texte: [], references: ["app"] },
+  "webhook/*": { champs: null, sens: "toute donnée envoyée à POST /api/evenements avec la source webhook", contexte: [], texte: [], references: [] },
 };
 
 /** Formes permises d'une valeur extraite : fermées, jamais un texte libre. */
@@ -133,14 +137,62 @@ const SCHEMA_TRADUCTION = {
       ],
       description: "source web à créer si le déclencheur vise une valeur publique (API ou page) qu'aucune source surveillée ne couvre ; null sinon",
     },
+    sens: {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            question: { type: "string", description: "question oui/non sur le sens, posée à Haiku à chaque événement qui passe les conditions si, ex. « ce document est-il un formulaire administratif ? »" },
+            depuis: { type: "array", items: { type: "string" }, description: "champs de l'événement à lire pour répondre (champs texte ou références)" },
+            apps: { type: "array", items: { type: "string" }, description: "app_active seulement : filtre gratuit avant Haiku, l'appli doit contenir un de ces noms (ex. Preview, Aperçu, Acrobat, Word), 20 au plus ; [] sinon" },
+            ecran: { type: "boolean", description: "app_active seulement : true pour joindre le texte lu à l'écran dans cette appli, quand le titre de fenêtre peut ne rien dire" },
+          },
+          required: ["question", "depuis", "apps", "ecran"],
+          additionalProperties: false,
+        },
+        { type: "null" },
+      ],
+      description: "condition de sens qu'aucune condition si ne sait exprimer ; null si les conditions si suffisent",
+    },
+    session: {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            app: { type: "string", description: "appli de travail, ex. Word" },
+            minutes: { type: "number", description: "durée minimale passée dans l'appli avant de la quitter, de 0.5 à 240" },
+          },
+          required: ["app", "minutes"],
+          additionalProperties: false,
+        },
+        { type: "null" },
+      ],
+      description: "app_active seulement, si vide : « dès que j'ai fini de travailler dans X » = au moins N min dans X, puis on la quitte ; la pipe reçoit l'appli, le document, le début, la fin ; null sinon",
+    },
+    attente: {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            minutes: { type: "number", description: "délai, de 0.5 à 14400 (10 jours)" },
+            cle: { type: "string", description: "champ référence qui identifie la personne ou le fil (ex. expediteur) : un nouvel événement de même clé annule l'attente" },
+          },
+          required: ["minutes", "cle"],
+          additionalProperties: false,
+        },
+        { type: "null" },
+      ],
+      description: "« s'il n'y a pas de suite sous N jours/min » : la pipe part N min après l'événement, sauf nouvel événement de même clé entre-temps ; null sinon",
+    },
+    transmettre: { type: "array", items: { type: "string" }, description: "champs référence que la pipe doit recevoir pour savoir de quoi il s'agit (document, expéditeur…) ; [] si inutile" },
     motif_refus: { type: "string", description: "explication courte si possible=false, sinon chaîne vide" },
   },
-  required: ["possible", "evenement", "si", "extraire", "source", "essais", "motif_refus"],
+  required: ["possible", "evenement", "si", "extraire", "source", "sens", "session", "attente", "transmettre", "essais", "motif_refus"],
   additionalProperties: false,
 };
 
 type Essai = { donnees_json: string; attendu: boolean; pourquoi: string };
-type Traduction = { possible: boolean; evenement: string; si: Condition[]; extraire?: unknown; source?: unknown; essais: Essai[]; motif_refus: string };
+type Traduction = { possible: boolean; evenement: string; si: Condition[]; extraire?: unknown; source?: unknown; sens?: unknown; session?: unknown; attente?: unknown; transmettre?: unknown; essais: Essai[]; motif_refus: string };
 type ConfigPipe = { name?: string; title?: string; description?: string; enabled?: boolean; trigger?: { custom?: unknown; events?: string[] } };
 /** Une pipe telle que GET /pipes la liste : sa config (front-matter de pipe.md) et sa consigne, le corps de pipe.md. */
 type PipeListee = { config?: ConfigPipe; prompt_body?: unknown };
@@ -180,7 +232,7 @@ export const idReglePipe = (pipe: string) => `pipe-des-que-${pipe}`;
  * que Claude lit au lancement et que la pipe ne reçoit jamais. Si elle fait créer une source web : sa définition (source),
  * validée avec le reste, que la pipe ne reçoit pas non plus. Sans rien de cela, ceux de ed1e505, octet pour octet.
  */
-function paramsPipe(pipe: string, desQue: Regle["desQue"], extraire: Extraction[] = [], source?: SourceProposee): Record<string, unknown> {
+function paramsPipe(pipe: string, desQue: Regle["desQue"], extraire: Extraction[] = [], source?: SourceProposee, b: Briques = SANS_BRIQUES): Record<string, unknown> {
   const contexte = EVENEMENTS[`${desQue.source}/${desQue.type}`]?.contexte ?? [];
   const gabarits = (champs: string[]) => Object.fromEntries(champs.map((c) => [c, `{{${c}}}`]));
   return {
@@ -188,7 +240,16 @@ function paramsPipe(pipe: string, desQue: Regle["desQue"], extraire: Extraction[
     ...(contexte.length ? { evenement: gabarits(contexte) } : {}),
     ...(extraire.length ? { extraire, lire: gabarits(champsLus(extraire)) } : {}),
     ...(source ? { source } : {}),
+    ...(briquesActives(b) ? { briques: b, references: gabarits(champsBriques(b)) } : {}),
   };
+}
+
+/** Cadre des briques pour un événement : ce qu'elles peuvent lire et transmettre. */
+const cadre = (evenement: string, si: Condition[] = []) => ({ evenement, texte: EVENEMENTS[evenement]?.texte ?? [], references: EVENEMENTS[evenement]?.references ?? [], si });
+/** Briques de la règle d'une pipe (SANS_BRIQUES sans). */
+function briquesDe(r: Regle): Briques {
+  const b = r.alors.mode === "fixe" ? r.alors.params.briques : undefined;
+  return b && typeof b === "object" ? (b as Briques) : SANS_BRIQUES;
 }
 
 /** Champs texte qu'un spec d'extraction fait lire, sans doublon. */
@@ -393,7 +454,9 @@ export async function verifierAcces(regle: Regle, pipe: ConfigPipe, lue?: Lectur
 /** Rejoue les essais proposés par Claude, sans Claude : c'est le moteur qui dit si la règle part. */
 export function rejouerEssais(regle: Regle, essais: Essai[]): { ok: boolean; lignes: string[] } {
   const lignes: string[] = [];
-  let ok = essais.some((e) => e.attendu) && essais.some((e) => !e.attendu);
+  // Sans condition si, une règle à briques (sens, session, attente) passe tout au moteur : aucun essai ne peut « ne pas déclencher ».
+  const sansSi = !(regle.desQue.si ?? []).length && briquesActives(briquesDe(regle));
+  let ok = essais.some((e) => e.attendu) && (sansSi || essais.some((e) => !e.attendu));
   if (!ok) lignes.push("il faut au moins un essai qui déclenche et un qui ne déclenche pas");
   for (const e of essais) {
     let donnees: Record<string, unknown>;
@@ -434,8 +497,17 @@ export async function traduireDeclencheur(pipe: string, titre: string, declenche
         "la source web à créer, et vise-la de même par « nom egal <son nom> » : préfère une API publique sans clé qui renvoie du " +
         "JSON, et un motif dont le premier groupe capture le nombre ; jamais d'adresse locale ou privée, ni d'API qui demande une " +
         "clé. Le moteur la lit une fois avant de proposer la règle, et ne la crée qu'au clic de l'utilisateur sur Valider. " +
-        "Sinon, source=null. Si rien ne couvre le déclencheur (appli active, texte à l'écran, phrase prononcée, valeur privée " +
-        "ou sans source publique…), réponds possible=false avec un motif clair. " +
+        "Sinon, source=null. " +
+        "Briques, à combiner quand les conditions si ne suffisent pas (sinon null ou []) : " +
+        "sens = une question oui/non posée à Haiku sur des champs de l'événement, pour ce qu'aucune condition ne sait dire " +
+        "(« un document administratif », « une promesse de rappel ») ; sur app_active, apps filtre d'abord l'appli gratuitement " +
+        "(liste large : Preview, Aperçu, Acrobat, Word…) et ecran=true joint le texte de l'écran quand le titre peut ne rien dire. " +
+        "session = « dès que j'ai fini de travailler dans X » sur app_active, avec si vide : au moins N min dans X puis on la quitte. " +
+        "attente = « s'il n'y a pas de suite sous N jours » : la pipe part N min après, sauf nouvel événement de même clé " +
+        "(ex. expediteur) ; convertis jours et heures en minutes. transmettre = les champs référence dont la pipe a besoin pour " +
+        "savoir de quoi il s'agit (le document, l'expéditeur, l'objet). Les essais ne portent que sur les conditions si : avec si vide, " +
+        "tous déclenchent. Si rien ne couvre le déclencheur (phrase prononcée, valeur privée ou sans source publique…), " +
+        "réponds possible=false avec un motif clair. " +
         "Traduction fidèle : n'élargis jamais le déclencheur. Ajoute des essais qui distinguent bien les deux cas. " +
         "La pipe ne reçoit jamais le texte de l'événement. Si sa consigne a besoin d'une information de ce texte (la couleur " +
         "demandée dans un mail, un numéro cité…), déclare-la dans extraire : à chaque lancement, le moteur la fera lire par " +
@@ -445,7 +517,7 @@ export async function traduireDeclencheur(pipe: string, titre: string, declenche
         "extraire = [] si l'action n'a besoin de rien du texte.",
       contenu:
         `Pipe : ${titre} (id ${pipe})\n${ceQueFaitLaPipe}\nDéclencheur à traduire : « ${declencheur} »\n\n` +
-        `Événements gérés :\n${Object.entries(EVENEMENTS).map(([k, v]) => `- ${k} : ${v.sens} ; champs : ${v.champs?.join(", ") ?? "libres"} ; champs texte (extraire) : ${v.texte.join(", ") || "aucun"}`).join("\n")}\n\n` +
+        `Événements gérés :\n${Object.entries(EVENEMENTS).map(([k, v]) => `- ${k} : ${v.sens} ; champs : ${v.champs?.join(", ") ?? "libres"} ; champs texte (extraire) : ${v.texte.join(", ") || "aucun"} ; références (transmettre, attente.cle) : ${v.references.join(", ") || "aucune"}`).join("\n")}\n\n` +
         `Sources surveillées :\n${sources.map((s) => (s.type === "web" ? `- web « ${s.nom} » (${s.url})` : `- ${s.type} ${s.mailbox ?? ""}`)).join("\n") || "(aucune)"}`,
       schema: SCHEMA_TRADUCTION,
       // Les synchronisations passent une à la fois : un Claude lent ne les bloque pas plus de 45 s.
@@ -462,6 +534,8 @@ export async function traduireDeclencheur(pipe: string, titre: string, declenche
   const ex = verifierExtraction(t.extraire ?? [], t.evenement);
   if (!ex.ok) return { ...base, statut: "refusee", motif: `extraction refusée : ${ex.motif}` };
   const desQue: Regle["desQue"] = { source, type, ...(t.si.length ? { si: t.si } : {}) };
+  const br = verifierBriques({ sens: t.sens, session: t.session, attente: t.attente, transmettre: t.transmettre }, cadre(t.evenement, t.si));
+  if (!br.ok) return { ...base, statut: "refusee", motif: `briques refusées : ${br.motif}` };
   // Source web à créer (valeur publique que rien ne surveille) : vérifiée, puis lue une fois. Refusée, rien n'est proposé.
   const src = await preparerSource(t.source, desQue, sources);
   if ("refus" in src) return { ...base, statut: "refusee", motif: `À débloquer d'abord : source web : ${src.refus}` };
@@ -470,7 +544,7 @@ export async function traduireDeclencheur(pipe: string, titre: string, declenche
     nom: `${titre || pipe} — dès que (pipe screenpipe)`,
     active: false,
     desQue,
-    alors: { mode: "fixe", action: "pipe.lancer", params: paramsPipe(pipe, desQue, ex.spec, src.source) },
+    alors: { mode: "fixe", action: "pipe.lancer", params: paramsPipe(pipe, desQue, ex.spec, src.source, br.briques) },
     validation: "auto",
   };
   const acces = await verifierAcces(regle, cfg, src.lecture);
@@ -547,7 +621,8 @@ const resumeRegle = (r: Regle, lue?: Lecture) => {
     ? ` ; source web « ${s.nom} » créée au clic sur Valider : ${s.url}, motif « ${s.motif} », relevée toutes les ${s.intervalleSecondes} s` +
       (lue ? ` ; valeur lue ${lue.valeur} le ${heure(lue.le)}` : "")
     : "";
-  return `dès que ${r.desQue.source}/${r.desQue.type}${si ? ` si ${si}` : ""} → lancer la pipe, en envoyant à son modèle ${transmis(r)}${jamais}${source}`;
+  const b = briquesActives(briquesDe(r)) ? ` ; briques : ${resumeBriques(briquesDe(r))}` : "";
+  return `dès que ${r.desQue.source}/${r.desQue.type}${si ? ` si ${si}` : ""}${b} → lancer la pipe, en envoyant à son modèle ${transmis(r)}${jamais}${source}`;
 };
 const lirePipes = async () => (await sp<{ data?: PipeListee[] }>("/pipes")).data ?? [];
 /** Consigne d'une pipe : le corps de son pipe.md (prompt_body de GET /pipes) ; "" sans. */
@@ -623,7 +698,8 @@ async function brancher(params: Record<string, unknown>, bus: Bus) {
   const alors = regle?.desQue && regle.alors?.mode === "fixe" ? regle.alors : undefined;
   const ex = alors && verifierExtraction(alors.params?.extraire ?? [], `${regle!.desQue.source}/${regle!.desQue.type}`);
   const src = alors && verifierSource(alors.params?.source, regle!.desQue);
-  if (!regle || !alors || !ex?.ok || !src?.ok || regle.id !== idReglePipe(pipe) || alors.action !== "pipe.lancer" || JSON.stringify(alors.params) !== JSON.stringify(paramsPipe(pipe, regle.desQue, ex.spec, src.source))) {
+  const br = alors && verifierBriques((alors.params?.briques as Record<string, unknown>) ?? {}, cadre(`${regle!.desQue.source}/${regle!.desQue.type}`, regle!.desQue.si));
+  if (!regle || !alors || !ex?.ok || !src?.ok || !br?.ok || regle.id !== idReglePipe(pipe) || alors.action !== "pipe.lancer" || JSON.stringify(alors.params) !== JSON.stringify(paramsPipe(pipe, regle.desQue, ex.spec, src.source, br.briques))) {
     throw new Error("règle de pipe invalide");
   }
   // Vérifié au moment de brancher : le déclencheur ou la consigne ont pu changer, ou la pipe disparaître, depuis la proposition.
@@ -756,11 +832,63 @@ const CONSIGNE_ACCES =
   "Si une ressource dont tu as besoin est inaccessible (outil absent, connexion non branchée, autorisation, clé, réseau), ne contourne rien et n'invente rien : envoie une notification screenpipe qui dit ce qui bloque et exactement comment le débloquer, puis arrête-toi.";
 executeurs["pipe.lancer"] = async (params, bus) => {
   const lire = params.lire;
+  const references = params.references;
   delete params.lire;
+  delete params.references; // texte de l'événement (titre de fenêtre, expéditeur…) : ne reste pas dans l'action
   if (!(bus instanceof Moteur) || typeof params.pipe !== "string") return lancerHorsPont(params, bus);
   const pipe = params.pipe;
   const regle = bus.regles.find((r) => r.active && r.id === idReglePipe(pipe));
   if (!regle) return lancerHorsPont(params, bus);
+  const texte = await controler(pipe, regle, bus);
+  const b = briquesDe(regle);
+  if (!briquesActives(b)) return partir(pipe, regle, texte, params.evenement, lire, {}, bus);
+
+  // Briques (briques.ts) : le moteur a filtré ; ici on décide si, et quand, la pipe part.
+  const brut = references && typeof references === "object" ? (references as Record<string, unknown>) : {};
+  const refs: Record<string, string> = Object.fromEntries(champsBriques(b).map((c) => [c, ligneSure(brut[c], 500)]));
+  // Un nouvel événement de la même personne est la suite attendue (« ils ont répondu ») : l'attente tombe, et lui ne réarme rien.
+  if (b.attente && briques.annulerAttente(pipe, b.attente, refs)) {
+    bus.journaliser("info", `pipe « ${pipe} » : attente annulée, suite reçue du même ${b.attente.cle}`);
+    return { lancee: false, motif: "suite reçue : attente annulée" };
+  }
+  let contexte: Record<string, string> = Object.fromEntries(b.transmettre.map((c) => [c, ligneSure(refs[c])]));
+  if (b.session) {
+    const s = briques.suivreSession(pipe, b.session, refs);
+    if ("motif" in s) return { lancee: false, motif: s.motif };
+    contexte = { ...contexte, ...s.contexte }; // l'appli et le document de la session finie, pas ceux qu'on vient d'ouvrir
+    bus.journaliser("info", `pipe « ${pipe} » : session de ${s.contexte.minutes} min dans ${b.session.app} terminée`);
+  }
+  if (b.sens) {
+    const j = await briques.jugerSens(b.sens, refs);
+    if (!j.motif.startsWith("appli hors liste")) bus.journaliser("info", `pipe « ${pipe} » : « ${b.sens.question} » → ${j.motif}`);
+    if (!j.oui) return { lancee: false, motif: j.motif };
+    if (!bus.regles.includes(regle)) throw new Error("règle arrêtée ou modifiée pendant la question de sens : non lancée");
+  }
+  if (b.attente) {
+    const a = b.attente;
+    const evenement = params.evenement;
+    const arme = briques.armerAttente(pipe, a, refs, async () => {
+      try {
+        if (!bus.regles.includes(regle) || !regle.active) return bus.journaliser("info", `pipe « ${pipe} » : attente échue, règle arrêtée ou modifiée : non lancée`);
+        bus.journaliser("info", `pipe « ${pipe} » : ${a.minutes} min sans nouvel événement du même ${a.cle} : lancement`);
+        await partir(pipe, regle, await controler(pipe, regle, bus), evenement, lire, contexte, bus);
+      } catch (e: any) {
+        bus.journaliser("alerte", `pipe « ${pipe} » : lancement après attente impossible (${ligneSure(e?.message, 200)})`);
+      }
+    });
+    if (!arme) return { lancee: false, motif: `attente impossible : ${a.cle} vide` };
+    bus.journaliser("info", `pipe « ${pipe} » : attente armée, lancement dans ${a.minutes} min sauf nouvel événement du même ${a.cle}`);
+    return { lancee: false, attente: a.minutes };
+  }
+  if (b.sens && Object.keys(contexte).length && briques.dejaLance(pipe, contexte)) return { lancee: false, motif: "déjà lancée pour ce contexte il y a moins de 30 min" };
+  return partir(pipe, regle, texte, params.evenement, lire, contexte, bus);
+};
+
+/**
+ * Revérification avant tout lancement : pipe retirée, désactivée, déclencheur modifié depuis la validation, ou règle
+ * différente de celle validée → elle ne part pas et sa règle s'arrête. Renvoie le déclencheur.
+ */
+async function controler(pipe: string, regle: Regle, bus: Moteur): Promise<string> {
   const v = lireValides()[pipe]; // au même instant que la règle (voir lireValides)
   const cfg = (await lirePipes()).find((p) => p.config?.name === pipe)?.config;
   const texte = texteDeclencheur(cfg?.trigger?.custom);
@@ -779,13 +907,18 @@ executeurs["pipe.lancer"] = async (params, bus) => {
     bus.diffuser(bus.etat());
     throw new Error(`${ecart} : non lancée`);
   }
+  return texte;
+}
+
+/** Le lancement lui-même : valeurs extraites s'il y en a, nombres de l'événement, contexte des briques, consigne d'accès. */
+async function partir(pipe: string, regle: Regle, texte: string, evenementParams: unknown, lire: unknown, contexte: Record<string, string>, bus: Moteur) {
   const ex = extractionDe(regle); // le spec de la règle validée, pas celui des paramètres remplis
   const extraites = ex.length ? await valeursExtraites(pipe, regle, ex, lire, texte, bus) : {};
   // Claude a pu prendre jusqu'à 30 s : une règle arrêtée ou remplacée entre-temps ne lance plus rien.
   if (ex.length && !bus.regles.includes(regle)) throw new Error("règle arrêtée ou modifiée pendant l'extraction : non lancée");
-  const evenement = { ...nombresTransmis(regle, params.evenement), ...extraites };
+  const evenement = { ...nombresTransmis(regle, evenementParams), ...extraites, ...contexte };
   return lancerPipe(pipe, { run_context: { source: "des-que", condition: texte, evenement, consigne: CONSIGNE_ACCES } }, bus);
-};
+}
 
 /**
  * Synchronisation, appelée toutes les minutes (main.ts) et par la route API. D'abord, sans attendre Claude, elle arrête
