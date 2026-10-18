@@ -13,7 +13,7 @@ Quand l'utilisateur demande une action conditionnelle (« dès que j'ai fini ma 
 2. Crée la pipe comme d'habitude, avec :
    - `schedule: manual` ;
    - `enabled: true` ;
-   - `trigger.custom` : une liste contenant la condition de l'utilisateur **mot pour mot**, en commençant par « dès que » (durées et applis comprises) ;
+   - `trigger.custom` : une liste contenant la condition de l'utilisateur **mot pour mot**, en commençant par « dès que » (durées et applis comprises), **toujours entre guillemets droits** ("…") : un « : » dans la phrase casserait sinon le YAML et screenpipe refuserait la pipe ;
    - un nom court en minuscules et tirets, et un titre.
 3. Écris la consigne (corps de pipe.md) pour ce qui se passe **une fois déclenchée** :
    - commence par « On te donne dans le contexte (run_context.evenement) … » et cite ce qui sera fourni : l'appli et le nom de fenêtre du document, l'expéditeur et l'objet d'un mail, etc. ; la consigne s'en sert pour retrouver l'objet (fichier via mdfind sur son nom, mail…) au lieu de chercher dans l'historique ;
@@ -30,7 +30,7 @@ enabled: true
 title: Vérifier mes sources
 trigger:
   custom:
-    - dès que j'ai fini ma rédaction dans Pages (au moins 1 minute)
+    - "dès que j'ai fini ma rédaction dans Pages (au moins 1 minute)"
 ---
 
 On te donne dans le contexte (run_context.evenement) l'application et le nom de fenêtre du document que l'utilisateur vient de finir.
