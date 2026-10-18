@@ -288,6 +288,11 @@ async function valider(entrees: Record<string, unknown>) {
   const f = Bun.file(process.env.FICHIER_PIPES_DES_QUE!);
   await Bun.write(f, JSON.stringify({ ...((await f.exists()) ? await f.json() : {}), ...entrees }));
 }
+/** Validations écrites, par pipe (fichier pas encore écrit : aucune). */
+async function validations(): Promise<Record<string, unknown>> {
+  const f = Bun.file(process.env.FICHIER_PIPES_DES_QUE!);
+  return (await f.exists()) ? await f.json() : {};
+}
 /** Déclencheur qu'un humain a validé avant que la pipe ne soit réécrite dans screenpipe. */
 const ANCIEN = "dès que le casque passe sous 95 €";
 /**
@@ -297,6 +302,20 @@ const ANCIEN = "dès que le casque passe sous 95 €";
 async function dejaValidee(pipe: string) {
   const desQue: Regle["desQue"] = { source: "web", type: "valeur_changee", si: [si[0]!, { champ: "valeur", op: "inferieur", valeur: "95" }] };
   await valider({ [pipe]: { texte: ANCIEN, desQue, alors: { mode: "fixe", action: "pipe.lancer", params: { pipe, evenement: { valeur: "{{valeur}}", ancienne: "{{ancienne}}" } } } } });
+}
+/**
+ * L'exécuteur d'origine de pipe.lancer (hors pont) retire d'abord pi-subagents de $HOME/.screenpipe/pi-config/settings.json
+ * (src/fixes/pi-subagents.ts) : le temps de f, HOME vise un dossier temporaire vide, jamais la configuration de la machine.
+ */
+async function avecHomeTemporaire<T>(f: () => Promise<T>): Promise<T> {
+  const avant = process.env.HOME;
+  process.env.HOME = mkdtempSync(join(tmpdir(), "des-que-home-"));
+  try {
+    return await f();
+  } finally {
+    if (avant === undefined) delete process.env.HOME;
+    else process.env.HOME = avant;
+  }
 }
 const prixCasque = (donnees: Record<string, unknown> = {}): Evenement => ({
   id: crypto.randomUUID(),
@@ -328,6 +347,16 @@ test("pipe.brancher : paramètres exactement ceux de son événement (la pipe, e
   expect(moteur.regles).toEqual([]);
   expect(await brancherAvec({ pipe: "params", evenement: nombres })).toEqual({ branchee: idReglePipe("params") });
   expect(await brancherAvec({ pipe: "params" }, surMail)).toEqual({ branchee: idReglePipe("params") });
+});
+
+test("pipe.brancher refuse une règle qui ne lance pas sa pipe, même avec les paramètres exacts de son événement", async () => {
+  const moteur = new Moteur(join(dossier, "regles-forge-action.json"));
+  pipes = [pipeCasque("forge-action")];
+  // Seule l'action diffère : « notifier » au lieu de « pipe.lancer », paramètres ceux que la traduction produit.
+  const forgee: Regle = { ...regle, id: idReglePipe("forge-action"), alors: { mode: "fixe", action: "notifier", params: { pipe: "forge-action", evenement: { valeur: "{{valeur}}", ancienne: "{{ancienne}}" } } } };
+  await expect(executeurs["pipe.brancher"]!({ pipe: "forge-action", declencheur: TEXTE, empreinteConsigne: empreinteConsigne(""), regle: forgee }, moteur)).rejects.toThrow("règle de pipe invalide");
+  expect(moteur.regles).toEqual([]);
+  expect((await validations())["forge-action"]).toBeUndefined();
 });
 
 test("lancement : la pipe ne reçoit que son déclencheur et les nombres listés de l'événement, jamais un texte", async () => {
@@ -411,7 +440,7 @@ test("lancement : sans champs d'événement, la pipe reçoit son déclencheur se
   await executeurs["pipe.lancer"]!({ pipe: "vide", evenement: "{{*}}" }, moteur); // pas un objet
   pipes = []; // pipe absente : un bus qui n'est pas le moteur lance quand même, comme avant
   const bus: Bus = { emettre: async () => {}, creerAction: (a) => a as any, diffuser: () => {}, journaliser: () => {} };
-  await executeurs["pipe.lancer"]!({ pipe: "vide", evenement: { valeur: 75 } }, bus);
+  await avecHomeTemporaire(() => executeurs["pipe.lancer"]!({ pipe: "vide", evenement: { valeur: 75 } }, bus));
   const seul = JSON.stringify({ run_context: { source: "des-que", condition: TEXTE, evenement: {}, consigne: CONSIGNE } });
   expect(envois).toEqual([
     { chemin: "/pipes/vide/run", corps: seul },
@@ -520,6 +549,60 @@ test("cache : un branchement en échec est reproposé à la synchronisation suiv
   expect(moteur.regles.find((r) => r.id === idReglePipe("panne"))).toBeUndefined();
 });
 
+test("branchement automatique : pipe neuve désactivée dans screenpipe pendant la traduction → rien n'est branché ni validé", async () => {
+  const moteur = new Moteur(join(dossier, "regles-auto-desactivee.json"));
+  const pipe = "auto-desactivee";
+  pipes = [pipeCasque(pipe)];
+  traduction = async () => {
+    // Désactivée pendant que Claude traduit. Nouvel objet, comme une nouvelle réponse de GET /pipes : la synchronisation garde
+    // la config lue avant la traduction (pipe active, accès OK) ; seul le branchement, qui relit la pipe, voit la désactivation.
+    pipes = [{ config: { ...pipeCasque(pipe).config, enabled: false } }];
+    return traductionOk();
+  };
+  await synchroniserAutomatiquement(moteur);
+  expect(moteur.regles.find((r) => r.id === idReglePipe(pipe))).toBeUndefined();
+  expect((await validations())[pipe]).toBeUndefined();
+  expect(moteur.journal.map((l) => [l.niveau, l.message])).toContainEqual([
+    "alerte",
+    `pipe « ${pipe} » : branchement automatique refusé (déclencheur ou consigne modifiés, ou pipe retirée, depuis la proposition : rien n'est branché) : passage en validation`,
+  ]);
+});
+
+/** Réponse de Claude à un déclencheur qu'aucun événement ne couvre. */
+const traductionImpossible = () => ({ possible: false, evenement: "webhook/*", si: [], essais: [], motif_refus: "texte à l'écran non géré" });
+
+test("cache : une pipe jamais branchée, refusée, puis en échec de traduction sur un autre texte : revenue au premier, elle est retraduite", async () => {
+  const moteur = new Moteur(join(dossier, "regles-cache-refus.json"));
+  const premier = "dès que je vois « facture » à l'écran";
+  traduction = traductionImpossible();
+  pipes = [pipeCasque("cache-refus", premier)];
+  expect((await synchroniserAutomatiquement(moteur))[0]).toMatchObject({ statut: "refusee" });
+  pipes[0]!.config.trigger.custom = "dès que je vois « devis » à l'écran";
+  traduction = new Error("Claude indisponible");
+  expect((await synchroniserAutomatiquement(moteur))[0]).toMatchObject({ statut: "erreur", motif: "traduction impossible : Claude indisponible" });
+  // Sans règle armée, rien d'autre n'oublie le premier texte : c'est la traduction en échec qui doit l'avoir oublié.
+  pipes[0]!.config.trigger.custom = premier;
+  traduction = traductionImpossible();
+  const avant = appelsClaude;
+  expect((await synchroniserAutomatiquement(moteur))[0]).toMatchObject({ statut: "refusee" });
+  expect(appelsClaude).toBe(avant + 1);
+  expect((await etatPipes(moteur))["cache-refus"]).toMatchObject({ declencheur: premier, statut: "refusee" });
+});
+
+test("cache : une pipe sortie de la liste est retraduite si elle revient, même avec le même texte", async () => {
+  const moteur = new Moteur(join(dossier, "regles-cache-sortie.json"));
+  const texte = "dès que je vois « bon de commande » à l'écran";
+  traduction = traductionImpossible();
+  pipes = [pipeCasque("cache-sortie", texte)];
+  expect((await synchroniserAutomatiquement(moteur))[0]).toMatchObject({ statut: "refusee" });
+  pipes = []; // sortie de la liste (supprimée dans screenpipe) ; refusée, elle n'avait pas de règle à arrêter
+  await synchroniserAutomatiquement(moteur);
+  pipes = [pipeCasque("cache-sortie", texte)];
+  const avant = appelsClaude;
+  expect((await synchroniserAutomatiquement(moteur))[0]).toMatchObject({ statut: "refusee" });
+  expect(appelsClaude).toBe(avant + 1);
+});
+
 test("règle « pipe-des-que-X » posée sans validation : ni affichée branchée, ni lancée ; arrêtée, la pipe est reproposée", async () => {
   const moteur = new Moteur(join(dossier, "regles-forgee.json"));
   // Validée sur le prix du casque d'un clic sur Valider (pipe déjà validée, puis réécrite). Branchée seule, l'état la dirait
@@ -561,6 +644,19 @@ test.todo("règle « pipe-des-que-X » posée sans validation sur une pipe branc
   const forgee: Regle = { id: idReglePipe("forgee-seule"), nom: "forgee-seule", active: true, desQue: { source: "mail", type: "mail_recu" }, alors: { mode: "fixe", action: "pipe.lancer", params: { pipe: "forgee-seule" } }, validation: "auto" };
   moteur.regles = [...moteur.regles.filter((r) => r.id !== forgee.id), forgee];
   expect((await etatPipes(moteur))["forgee-seule"]?.statut).not.toBe("branchee");
+});
+
+test("règle validée = même desQue et même alors : seules les conditions changées à la main, mêmes paramètres → non lancée, arrêtée", async () => {
+  const moteur = new Moteur(join(dossier, "regles-seuil-change.json"));
+  await brancher(moteur, "seuil-change");
+  // Une main dans regles.json : même id, même alors ; seuil relevé de 90 à 100 000, plus de condition sur ancienne.
+  moteur.regles = moteur.regles.map((r) => (r.id === idReglePipe("seuil-change") ? { ...r, desQue: { ...r.desQue, si: [si[0]!, { champ: "valeur", op: "inferieur", valeur: "100000" }] } } : r));
+  envois.length = 0;
+  // 95 € après 99 € : la règle validée (passe sous 90) ne partirait pas ; la règle changée, si.
+  await moteur.emettre(prixCasque({ valeur: 95, ancienne: 99 }));
+  expect(envois).toEqual([]);
+  expect([...moteur.actions.values()].find((a) => a.nom === "pipe.lancer")).toMatchObject({ statut: "echec", erreur: "règle différente de celle validée : non lancée" });
+  expect(moteur.regles.find((r) => r.id === idReglePipe("seuil-change"))?.active).toBe(false);
 });
 
 test("validation de l'ancien format (texte seul) : elle ne vaut pour aucune règle, la pipe est reproposée", async () => {
@@ -803,6 +899,31 @@ test("consigne modifiée, déclencheur inchangé : une pipe pas encore branchée
   expect(moteur.regles.find((r) => r.id === idReglePipe("consigne-propo"))).toMatchObject({ active: true, alors: { params: { extraire: [{ valeurs: ["bleu", "rouge"] }] } } });
 });
 
+test("branchement automatique : consigne modifiée pendant la traduction d'une pipe neuve → rien n'est branché ; la synchronisation suivante traduit la consigne actuelle", async () => {
+  const moteur = new Moteur(join(dossier, "regles-auto-consigne.json"));
+  const pipe = "auto-consigne";
+  const couleursPermises = (o: Record<string, any>) => String(o.contenu).match(/Couleurs permises : ([^.\n]+)\./)![1]!.split(", ");
+  const consigneAvec = (couleurs: string) => CONSIGNE_COULEUR.replace(COULEURS.join(", "), couleurs);
+  pipes = [{ ...pipeCouleur(pipe), prompt_body: consigneAvec("bleu, rouge, vert") }];
+  // Claude simulé fidèle à la consigne qu'il reçoit ; pendant qu'il traduit, « vert » est retiré de la consigne dans screenpipe.
+  traduction = (o: Record<string, any>) => {
+    const valeurs = couleursPermises(o);
+    pipes[0]!.prompt_body = consigneAvec("bleu, rouge");
+    return traductionCouleur([{ ...champCouleur, valeurs }]);
+  };
+  await synchroniserAutomatiquement(moteur);
+  // La pipe recevrait « vert », que sa consigne ne permet plus : rien n'est armé ni validé.
+  expect(moteur.regles.find((r) => r.id === idReglePipe(pipe))).toBeUndefined();
+  expect((await validations())[pipe]).toBeUndefined();
+  expect(moteur.journal.map((l) => [l.niveau, l.message])).toContainEqual([
+    "alerte",
+    `pipe « ${pipe} » : branchement automatique refusé (déclencheur ou consigne modifiés, ou pipe retirée, depuis la proposition : rien n'est branché) : passage en validation`,
+  ]);
+  traduction = (o: Record<string, any>) => traductionCouleur([{ ...champCouleur, valeurs: couleursPermises(o) }]);
+  await synchroniserAutomatiquement(moteur);
+  expect(moteur.regles.find((r) => r.id === idReglePipe(pipe))).toMatchObject({ active: true, alors: { params: { extraire: [{ valeurs: ["bleu", "rouge"] }] } } });
+});
+
 test("pipe.brancher : extraction hors règles, ou champs à lire qui ne sont pas les siens → « règle de pipe invalide »", async () => {
   const moteur = new Moteur(join(dossier, "regles-brancher-extraire.json"));
   const pipe = "brancher-extraire";
@@ -963,6 +1084,18 @@ test("lancement avec extraction : règle arrêtée pendant que Claude lit → la
   await emission;
   expect(envois).toEqual([]);
   expect(lancement(moteur)).toMatchObject({ statut: "echec", erreur: "règle arrêtée ou modifiée pendant l'extraction : non lancée" });
+});
+
+test("lancement avec extraction : délimiteurs du texte lu tirés au hasard à chaque lancement, qu'un mail ne peut pas deviner pour les imiter", async () => {
+  const moteur = new Moteur(join(dossier, "regles-couleur-marque.json"));
+  await brancherAvecExtraction(moteur, pipeCouleur("couleur-marque"), traductionCouleur());
+  extraction = { couleur: "rouge" };
+  const avant = demandes.length;
+  for (let i = 0; i < 2; i++) await moteur.emettre(mailRecu({ expediteur: LEA, objet: "Couleur", corps: "En rouge." }));
+  const marques = demandes.slice(avant).map((d) => String(d.contenu).match(/^<<<début objet (\w{8})>>>\n/)?.[1]);
+  expect(marques).toHaveLength(2);
+  expect(marques.every((m) => typeof m === "string")).toBe(true);
+  expect(marques[0]).not.toBe(marques[1]);
 });
 
 test("validation éclairée : la proposition, sa preuve et l'état disent ce que Claude lira et ce que la pipe recevra, jamais le texte du mail", async () => {
@@ -1592,6 +1725,28 @@ test("branchement automatique d'une pipe neuve qui fait créer une source : gard
     expect(moteur.actions.get(a.id)).toMatchObject({ statut: "echec", erreur: refus });
     expect(readFileSync(fichier, "utf8")).toBe(avant);
     expect(moteur.regles.find((r) => r.id === idReglePipe("btc-neuve-bascule"))).toBeUndefined();
+  });
+});
+
+test("branchement automatique : une source « Bitcoin » déclarée à la main avec une autre adresse pendant la traduction → rien n'est branché ni écrit, passage en validation", async () => {
+  await avecSources(async (fichier) => {
+    const moteur = new Moteur(join(dossier, "regles-btc-auto-conflit.json"));
+    const pipe = "btc-auto-conflit";
+    const aLaMain = JSON.stringify([...SOURCES_MAIN, { type: "web", ...sourceBtc, url: "https://autre.cours-demo.example/btc" }], null, 2);
+    pipes = [pipeBtc(pipe)];
+    traduction = async () => {
+      writeFileSync(fichier, aLaMain); // déclarée à la main pendant que Claude traduit : la traduction a lu le fichier avant
+      return traductionBtc();
+    };
+    lectures.length = 0;
+    await synchroniserAutomatiquement(moteur);
+    const conflit = `une source « Bitcoin » existe déjà dans ${fichier}, avec une autre adresse ou un autre motif : rien n'est branché`;
+    expect(moteur.journal.map((l) => [l.niveau, l.message])).toContainEqual(["alerte", `pipe « ${pipe} » : branchement automatique refusé (${conflit}) : passage en validation`]);
+    await Bun.sleep(20);
+    expect(readFileSync(fichier, "utf8")).toBe(aLaMain);
+    expect(lectures).toHaveLength(1); // celle de la traduction : aucun relevé
+    expect(moteur.regles.find((r) => r.id === idReglePipe(pipe))).toBeUndefined();
+    expect((await validations())[pipe]).toBeUndefined();
   });
 });
 
