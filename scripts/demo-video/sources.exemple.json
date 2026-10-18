@@ -1,0 +1,6 @@
+[
+  {"type": "web", "nom": "Casque audio", "url": "http://127.0.0.1:4310/", "motif": "Prix\\s*:\\s*([\\d.,]+)", "intervalleSecondes": 5},
+  {"type": "web", "nom": "ISS", "url": "https://api.wheretheiss.at/v1/satellites/25544", "motif": "\"latitude\":\\s*(-?[\\d.]+)", "intervalleSecondes": 5},
+  {"type": "web", "nom": "ISS Paris", "url": "http://127.0.0.1:4310/iss/distance?lat=48.8566&lon=2.3522", "motif": "Distance\\s*:\\s*([\\d.]+)", "intervalleSecondes": 5},
+  {"type": "web", "nom": "ISS Bordeaux", "url": "http://127.0.0.1:4310/iss/distance?lat=44.8378&lon=-0.5792", "motif": "Distance\\s*:\\s*([\\d.]+)", "intervalleSecondes": 5}
+]

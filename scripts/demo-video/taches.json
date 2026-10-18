@@ -1,0 +1,130 @@
+[
+  {
+    "nom": "Dès que j'ouvre « Suivi des devis », rappelle-moi de relancer les devis sans réponse",
+    "applis": [
+      "Google Chrome",
+      "Mail"
+    ],
+    "preuves": [
+      {
+        "date": "2026-10-17T12:10:00.000Z",
+        "extrait": "Activité fictive : « Suivi des devis » ouvert 6 fois en 24 h, 3 min en moyenne"
+      },
+      {
+        "date": "2026-10-17T12:10:00.000Z",
+        "extrait": "Activité fictive : 5 fois sur 6, un mail « Relance — Devis » suit dans les 10 min"
+      }
+    ],
+    "regle": {
+      "id": "proposee-suivi-devis",
+      "nom": "Suivi des devis ouvert → rappel des relances",
+      "active": true,
+      "desQue": {
+        "source": "screenpipe",
+        "type": "app_active",
+        "si": [
+          {
+            "champ": "fenetre",
+            "op": "contient",
+            "valeur": "Suivi des devis"
+          }
+        ]
+      },
+      "alors": {
+        "mode": "fixe",
+        "action": "notifier",
+        "params": {
+          "text": "Suivi des devis ouvert : pense à relancer les devis sans réponse depuis 7 jours."
+        }
+      },
+      "validation": "demander"
+    }
+  },
+  {
+    "nom": "Dès qu'une visio de plus de 15 min se termine, rappelle-moi d'envoyer le compte rendu",
+    "applis": [
+      "zoom.us",
+      "Mail"
+    ],
+    "preuves": [
+      {
+        "date": "2026-10-17T12:30:00.000Z",
+        "extrait": "Activité fictive : 3 visios de 25 à 40 min, 3 suivies d'un compte rendu en 30 min"
+      },
+      {
+        "date": "2026-10-18T07:30:00.000Z",
+        "extrait": "Activité fictive : 1 appel de 5 min, sans compte rendu : d'où le seuil de 15 min"
+      }
+    ],
+    "regle": {
+      "id": "proposee-compte-rendu",
+      "nom": "Visio de plus de 15 min terminée → rappel du compte rendu",
+      "active": true,
+      "desQue": {
+        "source": "screenpipe",
+        "type": "meeting_ended",
+        "si": [
+          {
+            "champ": "duration_secs",
+            "op": "superieur",
+            "valeur": 900
+          }
+        ]
+      },
+      "alors": {
+        "mode": "fixe",
+        "action": "notifier",
+        "params": {
+          "text": "Visio terminée : pense à envoyer le compte rendu."
+        }
+      },
+      "validation": "demander"
+    }
+  },
+  {
+    "nom": "Dès qu'une facture de papeterie-demo.example arrive, rappelle-moi de la ranger",
+    "applis": [
+      "Mail",
+      "Numbers"
+    ],
+    "preuves": [
+      {
+        "date": "2026-10-17T15:04:00.000Z",
+        "extrait": "Activité fictive : 4 factures de papeterie-demo.example en 24 h"
+      },
+      {
+        "date": "2026-10-17T15:05:00.000Z",
+        "extrait": "Activité fictive : 4 fois sur 4, « Factures fournisseurs » ouvert dans les 5 min"
+      }
+    ],
+    "regle": {
+      "id": "proposee-facture-fournisseur",
+      "nom": "Facture de la Papeterie Démo → rappel de rangement",
+      "active": true,
+      "desQue": {
+        "source": "mail",
+        "type": "mail_recu",
+        "si": [
+          {
+            "champ": "expediteur",
+            "op": "contient",
+            "valeur": "papeterie-demo.example"
+          },
+          {
+            "champ": "objet",
+            "op": "contient",
+            "valeur": "facture"
+          }
+        ]
+      },
+      "alors": {
+        "mode": "fixe",
+        "action": "notifier",
+        "params": {
+          "text": "Facture reçue ({{objet}}) : à ranger dans « Factures fournisseurs »."
+        }
+      },
+      "validation": "demander"
+    }
+  }
+]

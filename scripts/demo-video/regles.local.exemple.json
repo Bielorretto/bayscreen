@@ -1,0 +1,258 @@
+[
+  {
+    "id": "exemple-mail",
+    "nom": "Mail reçu → Claude propose un message Discord",
+    "active": false,
+    "desQue": {
+      "source": "mail",
+      "type": "mail_recu"
+    },
+    "alors": {
+      "mode": "ia",
+      "consigne": "Si le mail demande une réponse ou une action rapide, propose un message Discord court pour l’équipe : qui demande quoi, et pour quand. Si « memoire » montre un élément utile vu à l’écran (document, prix, date), cite-le avec l’heure où il a été vu. Paramètres : {\"content\": \"le message\"}. Ne recopie jamais d’adresse mail : le prénom suffit. Sinon, ne propose rien.",
+      "actionsPermises": [
+        "discord.envoyer",
+        "notifier"
+      ]
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "iss-paris-carte",
+    "nom": "L’ISS approche de Paris (moins de 1 000 km) → direct vidéo de la NASA et carte",
+    "active": true,
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ISS Paris"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": 999.5
+        },
+        {
+          "champ": "ancienne",
+          "op": "superieur",
+          "valeur": 999.5
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "ouvrir",
+      "params": {
+        "url": "http://127.0.0.1:4310/iss?lat=48.8566&lon=2.3522&nom=Paris"
+      }
+    },
+    "validation": "auto"
+  },
+  {
+    "id": "iss-bordeaux",
+    "nom": "L’ISS à moins de 1 500 km de Bordeaux → notification",
+    "active": true,
+    "validation": "auto",
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ISS Bordeaux"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": 1499.5
+        },
+        {
+          "champ": "ancienne",
+          "op": "superieur",
+          "valeur": 1499.5
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "notifier",
+      "params": {
+        "text": "L’ISS passe au-dessus de l’Europe : {{valeurTexte}} km de Bordeaux"
+      }
+    }
+  },
+  {
+    "id": "iss-equateur-nord",
+    "nom": "L’ISS passe dans l’hémisphère nord → notification",
+    "active": true,
+    "validation": "auto",
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ISS"
+        },
+        {
+          "champ": "valeur",
+          "op": "superieur",
+          "valeur": 0
+        },
+        {
+          "champ": "ancienne",
+          "op": "inferieur",
+          "valeur": 0
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "notifier",
+      "params": {
+        "text": "L’ISS franchit l’équateur vers le nord : latitude {{valeurTexte}}°"
+      }
+    }
+  },
+  {
+    "id": "iss-equateur-sud",
+    "nom": "L’ISS passe dans l’hémisphère sud → notification",
+    "active": true,
+    "validation": "auto",
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ISS"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": 0
+        },
+        {
+          "champ": "ancienne",
+          "op": "superieur",
+          "valeur": 0
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "notifier",
+      "params": {
+        "text": "L’ISS franchit l’équateur vers le sud : latitude {{valeurTexte}}°"
+      }
+    }
+  },
+  {
+    "id": "iss-lat-paris",
+    "nom": "L’ISS atteint la latitude de Paris → notification",
+    "active": true,
+    "validation": "auto",
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ISS"
+        },
+        {
+          "champ": "valeur",
+          "op": "superieur",
+          "valeur": 48.86
+        },
+        {
+          "champ": "ancienne",
+          "op": "inferieur",
+          "valeur": 48.86
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "notifier",
+      "params": {
+        "text": "L’ISS atteint la latitude de Paris (48,9° N) : {{valeurTexte}}°"
+      }
+    }
+  },
+  {
+    "id": "iss-paris-4000",
+    "nom": "L’ISS à moins de 4 000 km de Paris → notification",
+    "active": true,
+    "validation": "auto",
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ISS Paris"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": 3999.5
+        },
+        {
+          "champ": "ancienne",
+          "op": "superieur",
+          "valeur": 3999.5
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "notifier",
+      "params": {
+        "text": "L’ISS approche : {{valeurTexte}} km de Paris"
+      }
+    }
+  },
+  {
+    "id": "iss-paris-2000",
+    "nom": "L’ISS à moins de 2 000 km de Paris → notification",
+    "active": true,
+    "validation": "auto",
+    "desQue": {
+      "source": "web",
+      "type": "valeur_changee",
+      "si": [
+        {
+          "champ": "nom",
+          "op": "egal",
+          "valeur": "ISS Paris"
+        },
+        {
+          "champ": "valeur",
+          "op": "inferieur",
+          "valeur": 1999.5
+        },
+        {
+          "champ": "ancienne",
+          "op": "superieur",
+          "valeur": 1999.5
+        }
+      ]
+    },
+    "alors": {
+      "mode": "fixe",
+      "action": "notifier",
+      "params": {
+        "text": "L’ISS arrive sur l’Europe : {{valeurTexte}} km de Paris"
+      }
+    }
+  }
+]
