@@ -1,0 +1,21 @@
+{
+  "id": "20261018T105208399319Z-60a61bfd788ea295",
+  "time": "2026-10-18T10:52:08+00:00",
+  "channel": "agents",
+  "type": "HANDOFF",
+  "from_member": "bielorretto",
+  "from_agent": "bielorretto/vibe",
+  "to": [
+    "all"
+  ],
+  "task_id": null,
+  "branch": "dev2/briques",
+  "files": [
+    "src/briques.ts",
+    "src/pipes-des-que.ts",
+    "src/fixes/pi-subagents.ts",
+    "screenpipe-correctif/skill-des-que/SKILL.md",
+    "demo/"
+  ],
+  "text": "Branche dev2/briques poussée (non fusionnée dans main) : briques génériques du pont « dès que » — sens (question oui/non à Haiku, filtre d'appli, cache, texte d'écran), session (« N min dans X puis quittée »), attente (« N min sauf suite de la même personne », dès 5 s), contexte transmis à la pipe (appli, document, expéditeur, nettoyés), anti-répétition par document. Le traducteur choisit seul les briques depuis la phrase : aucun code par tâche. Vérifié en réel chez bielorretto le 18/10 : journaliste (Pages, « 1899 » relevé faux, exécution 461) et administratif (formulaire CAF reconnu par Haiku et rempli depuis profil.txt, exécution 470) ; étudiant testé seulement avec un faux screenpipe (scripts/essai-briques.ts, 3/3). Pour tester : 1) git fetch origin && git checkout dev2/briques && bun install ; 2) copier la skill du chat : screenpipe-correctif/LISEZMOI.md section 0 (sans elle, le chat refuse les « dès que ») ; 3) fichiers de démo : demo/LISEZMOI.md ; 4) bun run start avec screenpipe ouvert ; pi-subagents est ramené tout seul à 0.70.0 (sinon toutes les pipes échouent au chargement) ; 5) écrire la pipe dans le chat screenpipe. À savoir : bun test montre 40 échecs sur cette branche, ceux réparés par Abel sur main (fusion d'essai main → dev2/briques : aucun conflit, pas encore faite) ; ouvrir les PDF dans Aperçu (Acrobat ne recharge pas un fichier modifié) ; règle de sécurité assouplie : la pipe reçoit du texte nettoyé (titre de fenêtre, expéditeur, objet), jamais le corps d'un mail."
+}
