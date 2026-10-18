@@ -101,6 +101,26 @@ describe("mémoire", () => {
     expect(demandes).toEqual(["devis"]);
   });
 
+  test("une erreur puis un délai dépassé : la recherche s'arrête au délai, et c'est la première erreur qui remonte", async () => {
+    const demandes: unknown[] = [];
+    const s = souvenirs("Devis n° 42 casques", {}, async (p) => {
+      demandes.push(p.q);
+      if (p.q === "devis") throw new Error('screenpipe GET /search?q=devis&content_type=ocr → 503 {"error":"search is busy"}');
+      if (p.q === "42") throw new DOMException("The operation timed out.", "TimeoutError");
+      return chercher(p);
+    });
+    await expect(s).rejects.toThrow("503");
+    expect(demandes).toEqual(["devis", "42"]);
+  });
+
+  test("un seul mot-clé : un écran qui le contient suffit ; en erreur, l'erreur remonte", async () => {
+    expect((await souvenirs("Devis", {}, chercher)).map((x) => x.extrait)).toEqual([expect.stringContaining("1 290 €")]);
+    const enErreur = souvenirs("Devis", {}, async () => {
+      throw new Error("screenpipe GET /search?q=devis → 403 clé refusée (simulé)");
+    });
+    await expect(enErreur).rejects.toThrow("403");
+  });
+
   test("texte sans mot-clé : aucune requête, aucun souvenir", async () => {
     let requetes = 0;
     expect(await souvenirs("Re: OK", {}, async () => (requetes++, { data: [] }))).toEqual([]);
