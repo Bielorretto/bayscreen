@@ -75,11 +75,36 @@ describe("mémoire", () => {
     expect(s[0]!.extrait).toContain("1 290 €");
   });
 
-  test("screenpipe injoignable (toutes les requêtes en erreur) : souvenirs échoue, pour que l'appelant alerte « mémoire indisponible »", async () => {
-    const s = souvenirs("Devis n° 42 à valider", {}, async () => {
-      throw new Error("screenpipe GET /search → 403 clé refusée (simulé)");
+  test("screenpipe injoignable (toutes les requêtes en erreur) : la première erreur remonte, pour que l'appelant alerte « mémoire indisponible »", async () => {
+    const s = souvenirs("Devis n° 42 à valider", {}, async (p) => {
+      throw new Error(`screenpipe GET /search?q=${p.q} → 403 clé refusée (simulé)`);
     });
-    await expect(s).rejects.toThrow("403 clé refusée");
+    await expect(s).rejects.toThrow("q=devis → 403");
+  });
+
+  test("deux mots-clés, un en erreur : le seuil de deux mots n'est plus atteignable, l'erreur remonte au lieu d'une mémoire vide", async () => {
+    const s = souvenirs("Devis n° 42", {}, async (p) => {
+      if (p.q === "42") throw new Error('screenpipe GET /search?q=42&content_type=ocr → 503 {"error":"search is busy"}');
+      return chercher(p);
+    });
+    await expect(s).rejects.toThrow("503");
+  });
+
+  test("délai dépassé : screenpipe ne répond plus, les mots suivants ne sont pas cherchés et l'erreur remonte", async () => {
+    const demandes: unknown[] = [];
+    const s = souvenirs("Devis n° 42 casques", {}, async (p) => {
+      demandes.push(p.q);
+      if (p.q === "devis") throw new DOMException("The operation timed out.", "TimeoutError");
+      return chercher(p);
+    });
+    await expect(s).rejects.toThrow("timed out");
+    expect(demandes).toEqual(["devis"]);
+  });
+
+  test("texte sans mot-clé : aucune requête, aucun souvenir", async () => {
+    let requetes = 0;
+    expect(await souvenirs("Re: OK", {}, async () => (requetes++, { data: [] }))).toEqual([]);
+    expect(requetes).toBe(0);
   });
 
   test("un souvenir par fenêtre : un éditeur ouvert ne chasse pas la page du devis", async () => {
