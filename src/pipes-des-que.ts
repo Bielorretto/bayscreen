@@ -894,9 +894,9 @@ async function synchroniser(moteur: Moteur): Promise<RapportPipe[]> {
       ...(source && r.lecture ? [lectureSource(source, r.lecture)] : []),
       `Envoyé au modèle de la pipe à chaque lancement : ${transmis(r.regle!)}. Jamais le texte d'un mail, d'une page ou d'une transcription.`,
     ].join("\n");
-    // Règle produit (décision de Diouf, 17/10) : une pipe qu'il vient de créer dans screenpipe
-    // se branche seule — sa phrase dans le chat vaut validation. Seul un déclencheur modifié
-    // après coup redemande un geste (la proposition ci-dessous, à valider depuis screenpipe).
+    // Règle produit (décision de Diouf, 17/10) : une pipe jamais validée se branche seule — sa phrase dans le chat
+    // vaut validation. Une pipe qui a déjà une validation (déclencheur modifié après coup…), ou dont le branchement
+    // automatique échoue, attend un geste : la proposition ci-dessous, à valider depuis screenpipe.
     if (v === undefined) {
       try {
         await executeurs["pipe.brancher"]!(

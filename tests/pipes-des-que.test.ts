@@ -1,5 +1,5 @@
-import { expect, mock, setSystemTime, spyOn, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { afterAll, expect, mock, setSystemTime, spyOn, test } from "bun:test";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { Extraction } from "../src/pipes-des-que";
@@ -7,6 +7,16 @@ import type { Bus, Condition, Evenement, Regle } from "../src/types";
 
 const dossier = mkdtempSync(join(tmpdir(), "des-que-pipes-"));
 process.env.FICHIER_PIPES_DES_QUE = join(dossier, "valides.json");
+// L'exécuteur d'origine de pipe.lancer retire pi-subagents de $HOME/.screenpipe/pi-config/settings.json
+// (src/fixes/pi-subagents.ts) : pendant ce fichier, HOME vise un dossier temporaire, jamais la configuration de la machine.
+const homeAvant = process.env.HOME;
+const homeTests = mkdtempSync(join(tmpdir(), "des-que-home-"));
+process.env.HOME = homeTests;
+afterAll(() => {
+  if (homeAvant === undefined) delete process.env.HOME;
+  else process.env.HOME = homeAvant;
+  rmSync(homeTests, { recursive: true, force: true });
+});
 
 // Claude et screenpipe simulés : aucun appel réseau.
 let appelsClaude = 0;
@@ -304,20 +314,6 @@ async function dejaValidee(pipe: string) {
   const desQue: Regle["desQue"] = { source: "web", type: "valeur_changee", si: [si[0]!, { champ: "valeur", op: "inferieur", valeur: "95" }] };
   await valider({ [pipe]: { texte: ANCIEN, desQue, alors: { mode: "fixe", action: "pipe.lancer", params: { pipe, evenement: { valeur: "{{valeur}}", ancienne: "{{ancienne}}" } } } } });
 }
-/**
- * L'exécuteur d'origine de pipe.lancer (hors pont) retire d'abord pi-subagents de $HOME/.screenpipe/pi-config/settings.json
- * (src/fixes/pi-subagents.ts) : le temps de f, HOME vise un dossier temporaire vide, jamais la configuration de la machine.
- */
-async function avecHomeTemporaire<T>(f: () => Promise<T>): Promise<T> {
-  const avant = process.env.HOME;
-  process.env.HOME = mkdtempSync(join(tmpdir(), "des-que-home-"));
-  try {
-    return await f();
-  } finally {
-    if (avant === undefined) delete process.env.HOME;
-    else process.env.HOME = avant;
-  }
-}
 const prixCasque = (donnees: Record<string, unknown> = {}): Evenement => ({
   id: crypto.randomUUID(),
   source: "web",
@@ -441,7 +437,8 @@ test("lancement : sans champs d'événement, la pipe reçoit son déclencheur se
   await executeurs["pipe.lancer"]!({ pipe: "vide", evenement: "{{*}}" }, moteur); // pas un objet
   pipes = []; // pipe absente : un bus qui n'est pas le moteur lance quand même, comme avant
   const bus: Bus = { emettre: async () => {}, creerAction: (a) => a as any, diffuser: () => {}, journaliser: () => {} };
-  await avecHomeTemporaire(() => executeurs["pipe.lancer"]!({ pipe: "vide", evenement: { valeur: 75 } }, bus));
+  expect(process.env.HOME).toBe(homeTests); // vérifié avant l'appel : l'exécuteur d'origine ne touche que le HOME temporaire
+  await executeurs["pipe.lancer"]!({ pipe: "vide", evenement: { valeur: 75 } }, bus);
   const seul = JSON.stringify({ run_context: { source: "des-que", condition: TEXTE, evenement: {}, consigne: CONSIGNE } });
   expect(envois).toEqual([
     { chemin: "/pipes/vide/run", corps: seul },
@@ -618,7 +615,9 @@ test("branchement automatique en échec durable : un appel à Claude et une prop
   pipes = [pipeCasque(pipe)];
   const avant = appelsClaude;
   try {
-    for (let i = 0; i < 3; i++) await synchroniserAutomatiquement(moteur);
+    // Le rapport dit « à valider » : la proposition de repli attend un geste.
+    expect((await synchroniserAutomatiquement(moteur)).map((r) => [r.pipe, r.statut])).toEqual([[pipe, "a_valider"]]);
+    for (let i = 0; i < 2; i++) await synchroniserAutomatiquement(moteur);
     expect(appelsClaude).toBe(avant + 1);
     expect(refusAuto()).toHaveLength(1);
     expect(repli().map((a) => a.statut)).toEqual(["proposee"]);
