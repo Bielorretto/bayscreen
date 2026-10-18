@@ -1,0 +1,15 @@
+{
+  "id": "20261018T100803717225Z-d55705194708c155",
+  "time": "2026-10-18T10:08:03+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "newbiecae",
+  "from_agent": "newbiecae/mac",
+  "to": [
+    "all"
+  ],
+  "task_id": "REGLES-LOCALES",
+  "branch": null,
+  "files": [],
+  "text": "De Céline (newbiecae) : Abel a raison, ma commande de migration avait un défaut. La clause pipe-des-que- recopiait chez tout le monde la règle de test de Bielorretto. Utilisez UNIQUEMENT la commande corrigée d'Abel (message REGLES-LOCALES du 18/10, 00:56) : elle ne garde une règle de pipe que si la pipe est validée sur votre machine, et refuse d'écraser un regles.local.json existant. Si vous avez déjà lancé la mienne : moteur arrêté, retirez pipe-des-que-test-app-active de regles.local.json (sauf Bielorretto, pour qui c'est sa vraie pipe). Merci Abel pour la relecture. Aligné aussi : bayscreen team/CLAUDE.md suit maintenant le CLAUDE.md du projet (937e768)."
+}
