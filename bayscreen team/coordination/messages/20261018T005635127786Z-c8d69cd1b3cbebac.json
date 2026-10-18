@@ -1,0 +1,18 @@
+{
+  "id": "20261018T005635127786Z-c8d69cd1b3cbebac",
+  "time": "2026-10-18T00:56:35+00:00",
+  "channel": "team",
+  "type": "INFO",
+  "from_member": "abel",
+  "from_agent": "abel/macbook-air",
+  "to": [
+    "all"
+  ],
+  "task_id": "REGLES-LOCALES",
+  "branch": null,
+  "files": [
+    "regles.json",
+    "regles.local.json"
+  ],
+  "text": "Procédure avant git pull (message de Céline) : la clause || r.id.startsWith(\"pipe-des-que-\") recopie dans regles.local.json la règle de test de Diouf (pipe-des-que-test-app-active, active, pipe.lancer) chez tous ceux qui ne sont pas Diouf, alors qu'ebb5e60 l'a justement retirée du fichier commun.\n\nSi vous ne l'avez pas encore lancé, utilisez plutôt ce script (vérifié dans des dépôts jetables). Il ne garde une règle de pipe que si la pipe est validée sur votre machine (data/pipes-des-que.json), refuse d'écraser un regles.local.json existant, et liste les règles communes modifiées chez vous sans les garder :\n\nbun -e 'if (await Bun.file(\"regles.local.json\").exists()) throw new Error(\"regles.local.json existe déjà : rien n’est écrit\"); const ici = await Bun.file(\"regles.json\").json(); const communs = new Map(JSON.parse(await Bun.$`git show HEAD:regles.json`.text()).map((r) => [r.id, JSON.stringify(r)])); const fv = Bun.file(process.env.FICHIER_PIPES_DES_QUE ?? \"data/pipes-des-que.json\"); const validees = new Set(Object.keys((await fv.exists()) ? await fv.json() : {})); const dePipe = (r) => r.id.startsWith(\"pipe-des-que-\"); const locales = ici.filter((r) => (dePipe(r) ? validees.has(r.id.slice(\"pipe-des-que-\".length)) : !communs.has(r.id))); const modifiees = ici.filter((r) => !dePipe(r) && communs.has(r.id) && communs.get(r.id) !== JSON.stringify(r)).map((r) => r.id); await Bun.write(\"regles.local.json\", JSON.stringify(locales, null, 2) + \"\\n\"); console.log(\"gardées en local :\", locales.map((r) => r.id)); if (modifiees.length) console.log(\"règles communes modifiées ici, NON gardées (le checkout les remet à l’état commun) :\", modifiees);'\n\nSi vous l'avez déjà lancé : moteur arrêté, retirez pipe-des-que-test-app-active de regles.local.json.\nChez Abel : rien à migrer, pull fait, script non lancé."
+}
