@@ -1,104 +1,111 @@
-# Dès que
+# Obay Screen
+
+**Des agents screenpipe qui démarrent au bon moment.**
 
 Projet du hackathon screenpipe « Build Agents That Remember » (42 Paris, 16–18 oct. 2026).
 
 ## L'idée
 
-screenpipe enregistre en continu ce qui se passe sur un ordinateur (écran, audio,
-réunions) et le rend interrogeable par une API locale. Il donne une mémoire aux agents.
-Nous lui ajoutons des réflexes : **dès que X arrive, fais Y.**
+Une pipe screenpipe tourne d'habitude à heure fixe : toutes les X minutes, elle se réveille, cherche
+l'information et, le plus souvent, ne trouve rien. Avec Obay Screen, on écrit sa condition en français
+dans le chat de screenpipe :
 
-Trois briques, par ordre de priorité :
+> Dès que j'ai fini ma rédaction dans Pages (au moins 1 minute), vérifie toutes mes sources et envoie-moi un rapport.
 
-1. **A. Le moteur « dès que »**. Des événements arrivent : une visio se termine, une
-   valeur change sur une page web, un mail arrive. Des règles décident quoi faire : soit
-   une action fixe, prévue d'avance, soit une action proposée par Claude, que
-   l'utilisateur valide d'un clic. Les actions partent vers Slack, Telegram, un webhook
-   ou un pipe screenpipe.
-2. **B. L'ouverture**. On relit la mémoire screenpipe pour repérer les tâches qui se
-   répètent, on montre quelles applis externes sont branchées, et un clic transforme une
-   tâche repérée en règle du moteur.
-3. **C. Le copilote de visio**. Seulement pendant une visio, dire « OK Claude » au micro
-   réveille l'assistant. Il a toute la transcription de l'appel en contexte : on lui pose
-   une question (« qu'a promis Marc ? »), ou on lui demande une action (« envoie le récap
-   sur Slack »), qui passe par le moteur avec validation.
+Un moteur local traduit la phrase en règle, la surveille en continu, et lance la pipe au moment exact où
+la condition se réalise, avec le contexte en main (quel document, quel expéditeur). Aucun code n'est écrit
+par tâche : la même mécanique sert pour n'importe quelle phrase.
 
-## Architecture
+## Vérifié en réel (18/10)
+
+| Cas | Phrase écrite dans le chat | Résultat |
+| --- | --- | --- |
+| Journaliste | « Dès que j'ai fini ma rédaction dans Pages, vérifie toutes mes sources » | à la sortie de Pages, l'agent ouvre chaque lien et signale chiffres faux et liens morts |
+| Papiers administratifs | « Dès que j'ouvre un document administratif, remplis-le avec mes infos, sans rien soumettre ni signer » | Haiku reconnaît le formulaire, la pipe remplit 20 champs sur 21 depuis la fiche ; la date manquante reste vide |
+
+Le cas « relance d'un recruteur qui n'a pas rappelé » (mail + délai) passe avec un faux screenpipe
+(`bun scripts/essai-briques.ts`), pas encore en réel.
+
+## Comment ça marche
 
 ```
-screenpipe (/ws/events) ─┬─► copilote.ts ── question ──► assistant.ts ──► Claude
-                         │        │ (visio, micro, « OK Claude »)          │
-page web, mail, webhook ─┴─► moteur.ts ◄── fin de visio, demandes ─────────┘
-                                 │  règles (regles.json) : fixe ou Claude
-                                 ▼
-                             actions.ts ──► Discord, Slack, Telegram, webhook, pipe screenpipe, ouvrir
-                                 │
-                serveur.ts ◄─────┘──► page (public/index.html) : valider, refuser, suivre
+chat screenpipe ──► pipe.md (trigger.custom : la phrase, mot pour mot)
+                          │
+                          ▼  toutes les minutes : GET /pipes
+              src/pipes-des-que.ts ── Claude Sonnet ──► règle (JSON par schéma), vérifiée et testée
+                          │
+événements screenpipe ───►│  appli active (OCR, 3 s), /ws/events (visios), mails IMAP, pages web
+                          ▼
+                 src/moteur.ts : conditions simples, sans IA
+                          ▼
+                 src/briques.ts : sens (Haiku) · session · délai · contexte · anti-répétition
+                          ▼
+              POST /pipes/:id/run { run_context } ──► l'agent de la pipe fait la tâche, suivi jusqu'au bout
 ```
+
+Les briques que Claude assemble à partir de la phrase :
+
+| Brique | Exemple |
+| --- | --- |
+| **Événement** | appli active, mail reçu, valeur d'une page web, visio, webhook |
+| **Sens** | une question oui/non posée à Claude Haiku : « est-ce un document administratif ? » ; filtre d'appli gratuit avant, réponses en cache, texte de l'écran en secours |
+| **Session** | « au moins N min dans Pages, puis on la quitte » |
+| **Délai** | « s'il ne rappelle pas sous 5 jours » : annulé par un nouvel événement de la même personne |
+| **Contexte** | l'appli, le nom du document, l'expéditeur : texte nettoyé, une ligne, jamais le corps d'un mail |
+
+Le moteur évalue les règles en local ; Claude n'intervient qu'à la traduction (une fois par phrase) et
+pour les questions de sens (une fois par document, grâce au cache).
 
 ## Démarrer
 
-Prérequis : [Bun](https://bun.sh) 1.3 ou plus récent, screenpipe qui tourne sur la
-machine, une clé Claude.
+Prérequis : macOS, [Bun](https://bun.sh) 1.3+, l'appli screenpipe qui tourne, une clé Claude.
 
 ```sh
 bun install
-cp .env.example .env      # puis remplir les deux clés
-bun test                  # doit être vert
-bun run dev               # http://127.0.0.1:4300
+cp .env.example .env        # SCREENPIPE_LOCAL_API_KEY et ANTHROPIC_API_KEY
+bun run start               # moteur sur http://127.0.0.1:4300
 ```
 
-- Clé screenpipe : `screenpipe auth token` (ou l'appli : Réglages > Confidentialité).
-- Clé Claude : console Claude, dans `ANTHROPIC_API_KEY`.
-- `.env` n'est jamais commité ; aucune clé ne doit apparaître dans la vidéo.
+- Clé screenpipe : `screenpipe auth token`, ou l'appli : Réglages > Confidentialité.
+- **Apprendre les « dès que » au chat de screenpipe** (sinon il répond que ses tâches tournent à intervalle fixe) :
 
-Tester sans rien brancher : `bun run evt web valeur_changee '{"nom":"cours","valeur":120,"valeurTexte":"120","ancienne":"90"}'`
-déclenche la règle d'exemple et affiche une notification dans la page.
+  ```sh
+  mkdir -p ~/.screenpipe/pi-chat/.pi/skills/des-que
+  cp screenpipe-correctif/skill-des-que/SKILL.md ~/.screenpipe/pi-chat/.pi/skills/des-que/
+  ```
 
-Démo sur un événement réel et prévisible, le passage de l'ISS au-dessus de Paris. Copier la source
-« ISS Paris » de `sources.exemple.json` dans `sources.json`, passer `iss-paris-carte` et `iss-paris` à
-`"active": true` (inactives dans les exemples : elles ouvriraient un onglet à chaque passage), lancer la
-page de démo (`bun scripts/page-demo.ts`), puis relancer le moteur. La source lit la distance ISS–Paris. Sous
-1 000 km, la règle `iss-paris-carte` ouvre le direct vidéo officiel de la NASA, avec la distance et la
-carte (http://127.0.0.1:4310/iss?lat=48.8566&lon=2.3522&nom=Paris) ; sous 150 km, `iss-paris` notifie.
-L'ouverture ~2 min avant le survol laisse passer une éventuelle publicité YouTube.
-L'ISS passe près de Paris quelques fois par jour : heure exacte avec
-`https://api.wheretheiss.at/v1/satellites/25544/positions?timestamps=<secondes>,…` (10 instants par appel).
+  puis ouvrir une nouvelle conversation dans le chat et y écrire sa phrase « Dès que… ». La pipe est
+  branchée dans la minute (journal du moteur : « branchée automatiquement »).
+- `pi-subagents` : à partir de 0.71, cette extension fait échouer toutes les pipes de screenpipe ; le moteur la
+  ramène tout seul à 0.70.0 au démarrage et avant chaque lancement.
+- Fichiers de démo fictifs (article à sources, formulaire Cerfa vierge, fiche) : voir `demo/LISEZMOI.md`.
 
-## Travailler à deux avec Claude Code
+## Sécurité
 
-1. Ouvrir le dossier dans VS Code, ouvrir un terminal, lancer `claude`.
-   Claude Code lit automatiquement `CLAUDE.md`, qui importe `docs/SCREENPIPE.md`.
-2. Commencer chaque session par son rôle, par exemple :
-   - Dev 1 : « Je suis Dev 1. Lis docs/PLAN.md et attaque la phase 1 : la source mail.
-     Vérifie d'abord le format réel de GET /connections/imap/messages. »
-   - Dev 2 : « Je suis Dev 2. Lis docs/PLAN.md et attaque la phase 1 : teste le mode ia
-     avec la vraie clé, puis l'exécuteur Slack ou Telegram. »
-3. Chaque fichier a un propriétaire (tableau dans `CLAUDE.md`) : vos deux sessions ne
-   touchent jamais le même fichier. `src/types.ts` ne change qu'à deux.
-4. Git : une branche par développeur (`dev1`, `dev2`), petits commits, fusion à chaque
-   critère « Fini quand ». Les fichiers étant séparés, les fusions sont triviales.
+- Tout reste local : le moteur n'écoute que 127.0.0.1 ; aucune clé n'est écrite ni journalisée.
+- Les textes lus (écran, mails, pages) sont des données non fiables : Claude n'en suit aucune instruction,
+  et l'agent de la pipe n'en reçoit que des références nettoyées (appli, document, expéditeur, objet).
+- Les pipes de démo ne soumettent, ne signent et n'envoient rien en votre nom.
 
-## Fichiers
+## Fichiers principaux
 
-| Fichier | Rôle | Propriétaire |
-| --- | --- | --- |
-| `src/types.ts` | le contrat : Evenement, Regle, Action, messages vers la page | commun |
-| `src/config.ts`, `src/main.ts` | configuration, branchement des modules | commun |
-| `src/screenpipe.ts` | client de l'API screenpipe et du flux d'événements | Dev 1 |
-| `src/moteur.ts` | règles, conditions, création et exécution des actions, journal | Dev 1 |
-| `src/copilote.ts` | visio seulement, micro seul, phrase d'appel, fin de question | Dev 1 |
-| `src/sources/web.ts` | sondage d'une page web | Dev 1 |
-| `src/claude.ts` | appels à Claude (JSON par schéma) | Dev 2 |
-| `src/actions.ts` | exécuteurs : notifier, Discord, Slack, Telegram, webhook, pipe, ouvrir (page http/https) | Dev 2 |
-| `src/assistant.ts` | réponse aux questions de visio, demandes d'action | Dev 2 |
-| `src/serveur.ts`, `public/index.html` | serveur local et page | Dev 2 |
-| `regles.json`, `sources.exemple.json` | règles et sources d'exemple | — |
-| `docs/PLAN.md`, `docs/SCREENPIPE.md` | plan de nuit, référence screenpipe vérifiée | — |
+| Fichier | Rôle |
+| --- | --- |
+| `src/pipes-des-que.ts` | le pont : lit les pipes, fait traduire les phrases, branche et lance |
+| `src/briques.ts` | sens (Haiku), session, délai, contexte, anti-répétition |
+| `src/moteur.ts` | règles et conditions, actions, journal |
+| `src/screenpipe.ts`, `src/sources/*` | client screenpipe ; sources appli active, mail, web |
+| `src/claude.ts` | appels à Claude (JSON par schéma) |
+| `src/fixes/pi-subagents.ts` | contournement du bug d'extension de screenpipe |
+| `screenpipe-correctif/` | skill du chat, correctifs proposés à screenpipe |
+| `scripts/essai-briques.ts` | les 3 cas de bout en bout, vraie traduction, faux screenpipe |
+| `docs/SCREENPIPE.md` | référence de l'API screenpipe vérifiée dans son code |
 
-## État du squelette
+## État
 
-Fonctionne et testé : moteur et règles fixes, validation, page en direct, simulation
-d'événements, détection « OK Claude » en visio (tests unitaires). Écrit mais pas
-encore éprouvé faute de clés : appels à Claude, connexion réelle à screenpipe,
-exécuteurs Slack, Telegram et pipe. À faire : source mail, brique B.
+- `bun test` sur cette branche : les tests des briques passent ; 40 tests du pont échouent, ceux réparés
+  sur `main` (fusion de `main` sans conflit, pas encore faite).
+- Limites connues : un redémarrage du moteur oublie les sessions et délais en cours ; screenpipe ne capture
+  une fenêtre peu changeante qu'environ toutes les 30 s, d'où une précision d'environ 30 s sur les durées.
+
+*screenpipe · Claude (Sonnet pour traduire, Haiku pour juger) · Bun*
