@@ -1,0 +1,59 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R 7 0 R 8 0 R 9 0 R 10 0 R] /NeedAppearances true /DA (/Helv 11 Tf 0 g) /DR << /Font << /Helv 5 0 R >> >> >> >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> /Annots [6 0 R 7 0 R 8 0 R 9 0 R 10 0 R] >>
+endobj
+4 0 obj
+<< /Length 399 >>
+stream
+BT /F1 16 Tf 50 770 Td (CAF - Declaration trimestrielle de ressources) Tj ET
+BT /F1 10 Tf 50 750 Td (Document fictif pour une demonstration. Remplir tous les champs.) Tj ET
+BT /F1 11 Tf 50 686 Td (Nom) Tj ET
+BT /F1 11 Tf 50 646 Td (PrÈnom) Tj ET
+BT /F1 11 Tf 50 606 Td (Adresse) Tj ET
+BT /F1 11 Tf 50 566 Td (NumÈro d'allocataire) Tj ET
+BT /F1 11 Tf 50 526 Td (Ressources du trimestre \(EUR\)) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (nom) /TU (Nom) /Rect [250 680 560 702] /F 4 /P 3 0 R /DA (/Helv 11 Tf 0 g) /MK << /BC [0 0 0] >> >>
+endobj
+7 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (prenom) /TU (PrÈnom) /Rect [250 640 560 662] /F 4 /P 3 0 R /DA (/Helv 11 Tf 0 g) /MK << /BC [0 0 0] >> >>
+endobj
+8 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (adresse) /TU (Adresse) /Rect [250 600 560 622] /F 4 /P 3 0 R /DA (/Helv 11 Tf 0 g) /MK << /BC [0 0 0] >> >>
+endobj
+9 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (numero_allocataire) /TU (NumÈro d'allocataire) /Rect [250 560 560 582] /F 4 /P 3 0 R /DA (/Helv 11 Tf 0 g) /MK << /BC [0 0 0] >> >>
+endobj
+10 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (ressources) /TU (Ressources du trimestre \(EUR\)) /Rect [250 520 560 542] /F 4 /P 3 0 R /DA (/Helv 11 Tf 0 g) /MK << /BC [0 0 0] >> >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000015 00000 n 
+0000000199 00000 n 
+0000000256 00000 n 
+0000000423 00000 n 
+0000000873 00000 n 
+0000000970 00000 n 
+0000001130 00000 n 
+0000001296 00000 n 
+0000001464 00000 n 
+0000001656 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+1852
+%%EOF

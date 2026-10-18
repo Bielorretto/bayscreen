@@ -1,0 +1,6 @@
+Fiche fictive pour la démonstration « Dès que »
+Nom : MARTIN
+Prénom : Camille
+Adresse : 12 rue des Lilas, 45000 Orléans
+Numéro d'allocataire CAF : 1234567
+Ressources du trimestre : 1 850 €
