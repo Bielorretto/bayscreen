@@ -4,6 +4,12 @@
 
 Projet du hackathon screenpipe **« Build Agents That Remember »** · 42 Paris · 16–18 octobre 2026
 
+## La démo en 1 min 46
+
+[![Une phrase dans screenpipe, et le formulaire se remplit tout seul — cliquer pour voir la vidéo complète](docs/demo/apercu.gif)](docs/demo/des-que-demo.mp4)
+
+**[▶ Voir la vidéo complète (MP4, 1 min 46)](docs/demo/des-que-demo.mp4)** : deux phrases écrites dans le chat de screenpipe deviennent deux réflexes. Un article dont les sources sont vérifiées dès qu'on quitte Pages, et un formulaire administratif rempli dès qu'on l'ouvre. Toutes les données sont fictives.
+
 ---
 
 ## Le problème
@@ -120,4 +126,4 @@ La règle d'exemple se déclenche, et la notification arrive dans screenpipe.
 
 **Abel Melman** · **Bielorretto** · **NewbieCae**
 
-Développé avec [Claude Code](https://claude.com/claude-code). screenpipe est sous sa propre licence : ce dépôt n'en contient pas le code, seulement nos correctifs, destinés à être proposés à screenpipe.
+Développé avec [Claude Code](https://claude.com/claude-code). Vidéo de démo : voix générée avec ElevenLabs ; musique « Dark Star » par Infraction. screenpipe est sous sa propre licence : ce dépôt n'en contient pas le code, seulement nos correctifs, destinés à être proposés à screenpipe.
